@@ -1,0 +1,42 @@
+{
+  "id": "inv-stale-pipeline-20260723",
+  "title": "The Case of the Stale Pipeline",
+  "incident": {
+    "id": "incident-stale-nyc-taxi",
+    "title": "nyc-taxi freshness degradation",
+    "description": "The curated trip dataset exceeded its 60-minute freshness SLA without a hard pipeline failure.",
+    "detected_at": "2026-07-23T08:40:00Z",
+    "severity": "high"
+  },
+  "assets": [
+    {"id": "asset-raw", "name": "nyc_taxi.raw_trips", "platform": "snowflake", "asset_type": "dataset", "freshness_sla_minutes": 30},
+    {"id": "asset-curated", "name": "nyc_taxi.curated_trips", "platform": "snowflake", "asset_type": "dataset", "freshness_sla_minutes": 60},
+    {"id": "asset-dashboard", "name": "nyc_taxi.daily_operations", "platform": "looker", "asset_type": "dashboard", "freshness_sla_minutes": 120}
+  ],
+  "observations": [
+    {"id": "obs-schedule", "observed_at": "2026-07-23T07:00:00Z", "source": "sandbox snapshot", "summary": "The transform schedule changed from hourly to every two hours."},
+    {"id": "obs-watermark", "observed_at": "2026-07-23T08:35:00Z", "source": "sandbox snapshot", "summary": "Raw trips are current while curated trips lag by 95 minutes."}
+  ],
+  "evidence": [
+    {"id": "evidence-schedule", "observation_id": "obs-schedule", "source": "sandbox snapshot", "summary": "Scheduler metadata shows a two-hour interval after the deployment.", "observed_at": "2026-07-23T07:00:00Z", "reliability": 0.95},
+    {"id": "evidence-watermark", "observation_id": "obs-watermark", "source": "sandbox snapshot", "summary": "The raw-to-curated lineage edge has a 95-minute watermark gap.", "observed_at": "2026-07-23T08:35:00Z", "reliability": 0.9}
+  ],
+  "hypotheses": [
+    {"id": "hyp-schedule", "statement": "A schedule change introduced the freshness regression in the curated transform.", "confidence": {"evidence_coverage": 0.9, "source_reliability": 0.95, "consistency": 0.9, "lineage_proximity": 1.0}},
+    {"id": "hyp-source", "statement": "The upstream source is delayed.", "confidence": {"evidence_coverage": 0.4, "source_reliability": 0.9, "consistency": 0.3, "lineage_proximity": 0.8}}
+  ],
+  "conclusion": {"id": "conclusion-1", "summary": "The schedule regression is the most supported explanation; raw ingestion is not the origin.", "certainty": "high"},
+  "recommended_actions": [
+    {"id": "action-restore-schedule", "summary": "Restore the curated transform to an hourly schedule and backfill the missed interval.", "priority": "P1", "rationale": "It addresses the direct lineage break and returns the asset to its freshness SLA."}
+  ],
+  "relationships": [
+    {"source_id": "incident-stale-nyc-taxi", "relationship": "AFFECTS", "target_id": "asset-curated"},
+    {"source_id": "asset-raw", "relationship": "UPSTREAM_OF", "target_id": "asset-curated"},
+    {"source_id": "asset-curated", "relationship": "UPSTREAM_OF", "target_id": "asset-dashboard"},
+    {"source_id": "evidence-schedule", "relationship": "SUPPORTS", "target_id": "hyp-schedule"},
+    {"source_id": "evidence-watermark", "relationship": "SUPPORTS", "target_id": "hyp-schedule"},
+    {"source_id": "evidence-watermark", "relationship": "CONTRADICTS", "target_id": "hyp-source"},
+    {"source_id": "hyp-schedule", "relationship": "EXPLAINS", "target_id": "incident-stale-nyc-taxi"},
+    {"source_id": "conclusion-1", "relationship": "RECOMMENDS", "target_id": "action-restore-schedule"}
+  ]
+}

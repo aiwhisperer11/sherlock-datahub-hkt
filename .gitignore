@@ -1,0 +1,24 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+**pycache**/
+**/__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.py[cod]
+
+# Node.js / Next.js
+node_modules/
+.next/
+coverage/
+
+# Build artefacts
+dist/
+build/
+*.egg-info/
+*.tsbuildinfo

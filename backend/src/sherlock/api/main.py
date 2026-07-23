@@ -1,0 +1,30 @@
+import os
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from sherlock.connectors.sandbox import SandboxMetadataProvider
+from sherlock.domain.models import Investigation
+
+app = FastAPI(title="Sherlock Engine", version="0.1.0")
+
+origins = [origin.strip() for origin in os.getenv("SHERLOCK_CORS_ORIGINS", "http://localhost:3000").split(",") if origin.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=False,
+    allow_methods=["GET"],
+    allow_headers=["*"],
+)
+
+provider = SandboxMetadataProvider()
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.get("/api/v1/demo/stale-pipeline", response_model=Investigation)
+def stale_pipeline_demo() -> Investigation:
+    return provider.load_stale_pipeline_demo()
