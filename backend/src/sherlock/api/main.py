@@ -3,8 +3,9 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from sherlock.connectors.datahub import DataHubMetadataProvider
 from sherlock.connectors.sandbox import SandboxMetadataProvider
-from sherlock.domain.models import Investigation
+from sherlock.domain.models import FrozenDashboardResult, Investigation
 
 app = FastAPI(title="Sherlock Engine", version="0.1.0")
 
@@ -28,3 +29,8 @@ def health() -> dict[str, str]:
 @app.get("/api/v1/demo/stale-pipeline", response_model=Investigation)
 def stale_pipeline_demo() -> Investigation:
     return provider.load_stale_pipeline_demo()
+
+
+@app.get("/api/v1/demo/frozen-dashboard", response_model=FrozenDashboardResult)
+def frozen_dashboard_demo() -> FrozenDashboardResult:
+    return DataHubMetadataProvider().load_frozen_dashboard()

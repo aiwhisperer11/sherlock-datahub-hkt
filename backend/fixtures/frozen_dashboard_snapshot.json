@@ -1,0 +1,99 @@
+{
+  "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+  "name": "ORDER_DETAILS",
+  "platform": "snowflake",
+  "schema_total": 55,
+  "schema_fields": [
+    {"field_path": "quantity_on_hand", "native_data_type": "NUMBER(38,0)"},
+    {"field_path": "stock_status", "native_data_type": "VARCHAR(11)"},
+    {"field_path": "updated_at", "native_data_type": "TIMESTAMP_LTZ"}
+  ],
+  "structured_properties": {
+    "showcase.dataFreshnessSla": "Daily",
+    "showcase.dataQualityScore": 97.5,
+    "showcase.escalationContact": "urn:li:corpuser:b2fd91.EMP006"
+  },
+  "owners": ["David Kim", "Julia Novak"],
+  "escalation_contact": "Ian Chen",
+  "tags": ["💲 Large Table", "📈 Most Queried"],
+  "glossary_terms": ["PII", "SOC2 Auditable", "Order Total", "Revenue by Customer Class"],
+  "upstream": {
+    "direction": "upstream",
+    "hops": 1,
+    "offset": 0,
+    "limit": 20,
+    "total": 12,
+    "returned": 12,
+    "has_more": false,
+    "entities": [
+      {
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.inventories,PROD)",
+        "name": "INVENTORIES",
+        "platform": "dbt",
+        "entity_type": "DATASET"
+      }
+    ]
+  },
+  "downstream": {
+    "direction": "downstream",
+    "hops": 1,
+    "offset": 0,
+    "limit": 20,
+    "total": 14,
+    "returned": 14,
+    "has_more": false,
+    "entities": [
+      {
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,b2fd91.datahub_order_entries.Product_Perfromance_Measures,PROD)",
+        "name": "Product Perfromance Measures",
+        "platform": "powerbi",
+        "entity_type": "DATASET"
+      },
+      {
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:tableau,b2fd91.4a3af1dd-fd0c-7077-d5fd-aa2fdf87cb23,PROD)",
+        "platform": "tableau",
+        "entity_type": "DATASET"
+      },
+      {
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:looker,b2fd91.order-entry-looker.view.order_details,PROD)",
+        "name": "order_details",
+        "platform": "looker",
+        "entity_type": "DATASET"
+      }
+    ]
+  },
+  "consumers": [
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,b2fd91.datahub_order_entries.Product_Perfromance_Measures,PROD)",
+      "name": "Product Perfromance Measures",
+      "platform": "powerbi",
+      "entity_type": "DATASET"
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:tableau,b2fd91.4a3af1dd-fd0c-7077-d5fd-aa2fdf87cb23,PROD)",
+      "platform": "tableau",
+      "entity_type": "DATASET"
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:looker,b2fd91.order-entry-looker.view.order_details,PROD)",
+      "name": "order_details",
+      "platform": "looker",
+      "entity_type": "DATASET"
+    }
+  ],
+  "related_assets": [
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.inventories,PROD)",
+      "name": "INVENTORIES",
+      "platform": "snowflake",
+      "structured_properties": {
+        "showcase.dataFreshnessSla": "Weekly",
+        "showcase.dataQualityScore": 90.6
+      },
+      "escalation_contact": "Sarah Chen"
+    }
+  ],
+  "source": "snapshot_from_verified_datahub",
+  "captured_at": "2026-07-24T00:00:00Z",
+  "warning": "Sanitized snapshot from verified DataHub evidence. It does not represent live freshness."
+}
