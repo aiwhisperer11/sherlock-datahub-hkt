@@ -1,33 +1,24 @@
-# DataHub Integration Plan
+# DataHub Integration
 
-## Current status
+## Current behavior
 
-No live DataHub or MCP connection is implemented. `DataHubMetadataProvider` is intentionally a skeleton. This prevents a demo fixture from being misrepresented as live metadata.
+`DataHubMetadataProvider` supports the Frozen Dashboard demo through three read-only sources:
 
-## Capability gate
+1. DataHub MCP (`mcp`) using only `get_entities`, `list_schema_fields`, and `get_lineage`.
+2. GMS GraphQL (`graphql`) at `${DATAHUB_GMS_URL}/api/graphql`.
+3. A sanitized verified snapshot (`sandbox`).
 
-Before implementing an adapter, run a local DataHub Quickstart and inspect the installed DataHub MCP server. Record the actual tool names and confirm which of these are available:
+`auto` tries MCP, GraphQL, then the snapshot. Each attempt is emitted with its provider, status, duration, and sanitized failure reason. Evidence is selected from one provider per response; it is never silently merged.
 
-1. Asset metadata: schema, owners, tags, last-modified time.
-2. Upstream and downstream lineage.
-3. Freshness, assertions, incidents, and data-quality signals.
-4. Stable DataHub URLs that can be retained as evidence links.
+## Safety
 
-The selected NYC Taxi asset URN must be discovered from the running DataHub instance, never hardcoded from an assumption.
+- MCP receives `DATAHUB_GMS_URL` and `DATAHUB_GMS_TOKEN` only in its child-process environment, with `TOOLS_IS_MUTATION_ENABLED=false`.
+- GraphQL sends a token only as an Authorization header when one is configured.
+- No provider treats `Last Updated` or `Synced` as data freshness.
+- The snapshot is explicitly labelled `snapshot_from_verified_datahub` and is not live freshness evidence.
 
-## Proposed adapter responsibilities
+## Endpoint contract
 
-| Concern | Adapter output |
-| --- | --- |
-| Asset reader | name, platform, type, schema, ownership, tags, last modified |
-| Lineage reader | structured upstream/downstream assets with graph depth |
-| Freshness reader | observed timestamp, lag, SLA context, source link |
-| Evidence mapper | traceable `Evidence` with source and reliability |
+`GET /api/v1/demo/frozen-dashboard` separates `simulated_incident_input`, `observed_from_datahub`, `derived_by_sherlock`, `limitations`, `provider_attempts`, and `selected_provider`.
 
-## Fallback rule
-
-If live metadata cannot be read during a demo, return a snapshot explicitly labelled with `is_snapshot`, `snapshot_timestamp`, and a human-readable note. Do not silently substitute fixture data for a live response.
-
-## Security
-
-Credentials stay out of the repository. Any future URL or token is supplied through documented environment variables only; `.env` files remain ignored.
+The initial dashboard symptom is simulated. Metadata evidence can support hypotheses, but the implementation never claims a root cause without operational logs or other confirming evidence.

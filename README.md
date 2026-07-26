@@ -1,6 +1,6 @@
 # Sherlock Evidence Sandbox
 
-Sherlock investigates **The Case of the Stale Pipeline**: a NYC Taxi revenue dashboard is stale, and the investigation distinguishes a genuine business event from a silent data-pipeline degradation. It presents the affected assets, evidence, hypotheses, explainable confidence, conclusion, and recommended action.
+Sherlock investigates **The Case of the Frozen Dashboard**: a dashboard has missed its expected update, and the investigation keeps the simulated alert, observed DataHub metadata, derived hypotheses, limitations, and recommendation distinct.
 
 ## Repository layout
 
@@ -41,9 +41,9 @@ npm run dev
 
 Open `http://localhost:3000`. The frontend reads `NEXT_PUBLIC_SHERLOCK_API_URL`, which defaults to `http://localhost:8000`.
 
-## Sandbox status
+## DataHub evidence modes
 
-The current vertical slice uses a deterministic, clearly labelled JSON sandbox fixture. It does not connect to external services and does not use an LLM. DataHub MCP integration is intentionally **not implemented yet**; the backend only contains the interface boundary for a future adapter.
+The default vertical slice uses a deterministic, clearly labelled JSON snapshot from verified DataHub evidence and does not use an LLM. The Frozen Dashboard endpoint also supports read-only DataHub MCP and GMS GraphQL providers. In `auto` mode it tries MCP, GraphQL, then the snapshot; each provider attempt is returned in the response. Snapshot evidence is explicitly marked as non-live freshness evidence.
 
 ## Validation
 
