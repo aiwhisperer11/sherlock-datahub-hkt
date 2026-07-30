@@ -44,7 +44,7 @@ def normalise_datahub_observation(
 
     captured_at = observation.captured_at
     limitations = [_METADATA_LIMITATION]
-    live = selected_provider != "snapshot"
+    live = selected_provider not in {"snapshot", "sandbox"}
     if not live:
         limitations.append(_SNAPSHOT_LIMITATION)
 

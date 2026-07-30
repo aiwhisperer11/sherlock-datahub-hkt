@@ -7,7 +7,7 @@ import pytest
 from sherlock.domain.models import DataHubObservation, LineageEntity, LineagePage, SchemaField
 from sherlock.integrations.sherlock_core import DataHubInvestigationRequest, ProviderAttempt, SherlockFollowUpRequest, normalise_datahub_observation, prepare_follow_up, reconcile_follow_up_ids, select_observation
 from sherlock.integrations.sherlock_core.contracts import DataHubInvestigationResponse
-from sherlock.integrations.sherlock_core.contracts import DataHubEvidenceSourceReference, NewEvidence
+from sherlock.integrations.sherlock_core.contracts import DataHubEvidenceSourceReference, EvidenceSourceReference, NewEvidence
 from sherlock.integrations.sherlock_core.normalizer import build_case_id
 from sherlock.integrations.sherlock_core.boundary import CanonicalInvestigationError, validate_unchanged
 
@@ -67,6 +67,39 @@ def test_snapshot_evidence_is_marked_non_live_without_claiming_freshness() -> No
     assert "This is a non-live snapshot." in baseline.evidence[0].content
     assert provenance.limitations[-1] == "This is a non-live snapshot."
     assert not any(source.live for source in provenance.evidence_sources.values())
+
+
+def test_sandbox_metadata_mode_is_accepted_and_maps_to_snapshot_selection() -> None:
+    request_with_sandbox = DataHubInvestigationRequest(
+        asset_urn=observation().urn,
+        incident_id="alert/123",
+        observed_outcome="Dashboard did not update.",
+        expected_behavior="Dashboard should update after the scheduled pipeline run.",
+        metadata_mode="sandbox",
+    )
+    selected, provider, attempts = select_observation(
+        request_with_sandbox.metadata_mode,
+        {"mcp": observation, "graphql": observation, "snapshot": observation},
+    )
+
+    assert selected.urn == observation().urn
+    assert provider == "snapshot"
+    assert [(item.provider, item.status) for item in attempts] == [("snapshot", "succeeded")]
+
+
+def test_evidence_source_reference_serializes_backward_compatible_source_reference() -> None:
+    reference = EvidenceSourceReference(
+        asset_urn=observation().urn,
+        provider="snapshot",
+        query_or_aspect="schema:a_field",
+        captured_at=observation().captured_at,
+        limitations=["Metadata only"],
+        live=False,
+    )
+
+    dumped = reference.model_dump(mode="json")
+    assert dumped["query_or_aspect"] == "schema:a_field"
+    assert dumped["source_reference"] == "schema:a_field"
 
 
 def test_normalizer_rejects_mismatched_asset() -> None:

@@ -10,7 +10,8 @@ from .contracts import EvidenceProvider, ProviderAttempt
 _ORDER: tuple[EvidenceProvider, ...] = ("mcp", "graphql", "snapshot")
 
 def select_observation(mode: str, fetchers: Mapping[EvidenceProvider, Callable[[], DataHubObservation]]) -> tuple[DataHubObservation, EvidenceProvider, list[ProviderAttempt]]:
-    order = _ORDER if mode == "auto" else (mode,)
+    normalized_mode = "snapshot" if mode == "sandbox" else mode
+    order = _ORDER if normalized_mode == "auto" else (normalized_mode,)
     attempts: list[ProviderAttempt] = []
     for provider in order:
         if provider not in _ORDER or provider not in fetchers:
@@ -19,7 +20,7 @@ def select_observation(mode: str, fetchers: Mapping[EvidenceProvider, Callable[[
             observed = fetchers[provider]()  # exactly one successful provider is selected
         except Exception as error:
             attempts.append(ProviderAttempt(provider=provider, status="failed", error_code="metadata_unavailable", message=_sanitize(str(error))))
-            if mode != "auto":
+            if normalized_mode != "auto":
                 raise
         else:
             attempts.append(ProviderAttempt(provider=provider, status="succeeded"))

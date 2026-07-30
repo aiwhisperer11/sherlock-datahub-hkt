@@ -16,6 +16,7 @@ from sherlock.connectors.datahub.provider import (
     McpMetadataProvider,
     SnapshotMetadataProvider,
     _extract_mcp_structured_result,
+    _normalise_graphql_payload,
     _normalise_mcp,
 )
 from sherlock.domain.models import DataHubObservation
@@ -202,6 +203,8 @@ def test_auto_marks_mcp_not_configured_before_snapshot_fallback() -> None:
 
     assert result.selected_provider == "snapshot"
     assert [(attempt.provider, attempt.status) for attempt in result.provider_attempts] == [("mcp", "not_configured"), ("graphql", "failed"), ("snapshot", "succeeded")]
+
+
 def test_result_separates_simulated_observed_and_derived() -> None:
     result = DataHubMetadataProvider(DataHubSettings(mode="sandbox"), {"snapshot": StubSource(snapshot())}).load_frozen_dashboard()
 
@@ -253,6 +256,42 @@ def test_snapshot_exposes_related_inventory_metadata_as_observed_evidence() -> N
     assert inventory.name == "INVENTORIES"
     assert inventory.structured_properties["showcase.dataFreshnessSla"] == "Weekly"
     assert any(item.id == "E9" and item.provenance == "snapshot_fixture" for item in result.evidence)
+
+
+def test_graphql_payload_includes_related_inventory_metadata() -> None:
+    observed = _normalise_graphql_payload(
+        {
+            "dataset": {
+                "urn": ORDER_DETAILS_URN,
+                "name": "ORDER_DETAILS",
+                "platform": {"name": "snowflake"},
+                "structuredProperties": {"properties": []},
+                "schemaMetadata": {"fields": []},
+                "ownership": {"owners": []},
+                "tags": {"tags": []},
+                "glossaryTerms": {"terms": []},
+                "upstream": {"total": 0, "relationships": []},
+                "downstream": {"total": 0, "relationships": []},
+            },
+            "inventories": {
+                "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.inventories,PROD)",
+                "name": "INVENTORIES",
+                "platform": {"name": "snowflake"},
+                "structuredProperties": {
+                    "properties": [
+                        {
+                            "structuredProperty": {"definition": {"qualifiedName": "showcase.dataFreshnessSla"}},
+                            "values": [{"stringValue": "Weekly"}],
+                        }
+                    ]
+                },
+            },
+        }
+    )
+
+    assert observed.source == "graphql"
+    assert observed.related_assets[0].name == "INVENTORIES"
+    assert observed.related_assets[0].structured_properties["showcase.dataFreshnessSla"] == "Weekly"
 
 
 def test_sandbox_snapshot_warning_is_explicit_and_non_auditable() -> None:

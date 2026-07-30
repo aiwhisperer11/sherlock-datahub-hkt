@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, Protocol
-from typing import Any, Literal, Protocol
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
@@ -131,9 +130,9 @@ class GraphQLMetadataProvider:
                 body = json.loads(response.read())
         except (OSError, URLError, TimeoutError, json.JSONDecodeError) as error:
             raise DataHubProviderError("GraphQL metadata request failed") from error
-        if body.get("errors") or not isinstance(body.get("data", {}).get("dataset"), dict):
+        if body.get("errors") or not isinstance(body.get("data"), dict) or not isinstance(body["data"].get("dataset"), dict):
             raise DataHubProviderError("GraphQL metadata response was invalid")
-        return _normalise_graphql_dataset(body["data"]["dataset"])
+        return _normalise_graphql_payload(body["data"])
 
 
 class McpMetadataProvider:
@@ -297,9 +296,15 @@ def _normalise_mcp_lineage(direction: str, payload: dict[str, Any]) -> LineagePa
     )
 
 
-def _normalise_graphql_dataset(dataset: dict[str, Any]) -> DataHubObservation:
+def _normalise_graphql_payload(payload: dict[str, Any]) -> DataHubObservation:
+    dataset = payload["dataset"]
     schema = dataset.get("schemaMetadata") or {}
     downstream = _normalise_graphql_lineage("downstream", dataset.get("downstream") or {})
+    related_assets = [
+        _observed_asset(payload["inventories"])
+        for _ in [None]
+        if isinstance(payload.get("inventories"), dict)
+    ]
     return DataHubObservation(
         urn=str(dataset.get("urn") or ORDER_DETAILS_URN),
         name=str(dataset.get("name") or dataset.get("properties", {}).get("name") or "ORDER_DETAILS"),
@@ -314,6 +319,7 @@ def _normalise_graphql_dataset(dataset: dict[str, Any]) -> DataHubObservation:
         upstream=_normalise_graphql_lineage("upstream", dataset.get("upstream") or {}),
         downstream=downstream,
         consumers=_consumer_entities(downstream.entities),
+        related_assets=related_assets,
         source="graphql",
         captured_at=datetime.now(UTC),
     )
@@ -438,7 +444,6 @@ def _integer(value: Any) -> int | None:
 def _build_frozen_dashboard_result(observed: DataHubObservation, attempts: list[ProviderAttempt], selected_provider: str) -> FrozenDashboardResult:
     """Build a deterministic investigation; only telemetry is simulated, never DataHub evidence."""
     metadata_provenance: Literal["observed_from_datahub", "snapshot_fixture"] = "observed_from_datahub" if selected_provider in {"mcp", "graphql"} else "snapshot_fixture"
-    metadata_provenance: Literal["observed_from_datahub", "snapshot_fixture"] = "observed_from_datahub" if selected_provider in {"mcp", "graphql"} else "snapshot_fixture"
     telemetry = [
         SimulatedTelemetry(id="telemetry:dashboard-age", label="Dashboard data age", value_hours=31, context="Reported dashboard symptom."),
         SimulatedTelemetry(id="telemetry:dashboard-expectation", label="Expected dashboard age from DataHub Daily SLA", value_hours=24, context="Expectation derived from observed DataHub SLA."),
@@ -486,7 +491,6 @@ def _build_frozen_dashboard_result(observed: DataHubObservation, attempts: list[
     ]
     for asset in observed.related_assets:
         if asset.urn == INVENTORIES_URN:
-            evidence.append(InvestigationEvidence(id="E9", statement=f"DataHub metadata for INVENTORIES records a {asset.structured_properties.get('showcase.dataFreshnessSla', 'recorded')} SLA, quality score {asset.structured_properties.get('showcase.dataQualityScore', 'not recorded')}, and escalation contact {asset.escalation_contact or 'not recorded'}.", provenance=metadata_provenance, source_reference=asset.urn, reliability=0.9, observed_at=observed.captured_at, limitations=["Metadata describes the asset but does not provide a live freshness timestamp."]))
             evidence.append(InvestigationEvidence(id="E9", statement=f"DataHub metadata for INVENTORIES records a {asset.structured_properties.get('showcase.dataFreshnessSla', 'recorded')} SLA, quality score {asset.structured_properties.get('showcase.dataQualityScore', 'not recorded')}, and escalation contact {asset.escalation_contact or 'not recorded'}.", provenance=metadata_provenance, source_reference=asset.urn, reliability=0.9, observed_at=observed.captured_at, limitations=["Metadata describes the asset but does not provide a live freshness timestamp."]))
     matrix = [
         HypothesisMatrixEntry(hypothesis_id="H1", evidence_id="E1", relationship="supports", weight=0.55, rationale="A missing dashboard update establishes a downstream symptom compatible with a stalled transformation."),
@@ -580,12 +584,15 @@ def _graphql_query() -> str:
       dataset(urn: "{ORDER_DETAILS_URN}") {{
         urn name platform {{ name }} properties {{ name description }}
         structuredProperties {{ properties {{ structuredProperty {{ urn definition {{ qualifiedName }} }} values {{ ... on StringValue {{ stringValue }} ... on NumberValue {{ numberValue }} }} valueEntities {{ __typename ... on CorpUser {{ properties {{ displayName }} }} }} }} }}
-        structuredProperties {{ properties {{ structuredProperty {{ urn definition {{ qualifiedName }} }} values {{ ... on StringValue {{ stringValue }} ... on NumberValue {{ numberValue }} }} valueEntities {{ __typename ... on CorpUser {{ properties {{ displayName }} }} }} }} }}
         schemaMetadata {{ fields {{ fieldPath nativeDataType description }} }}
         ownership {{ owners {{ owner {{ ... on CorpUser {{ properties {{ displayName }} }} ... on CorpGroup {{ name }} }} }} }}
         tags {{ tags {{ tag {{ properties {{ name }} }} }} }}
         glossaryTerms {{ terms {{ term {{ properties {{ name }} }} }} }}
         upstream: lineage(input: {{direction: UPSTREAM, start: 0, count: 100}}) {{ total relationships {{ type entity {{ urn type ... on Dataset {{ name platform {{ name }} properties {{ name }} }} }} }} }}
         downstream: lineage(input: {{direction: DOWNSTREAM, start: 0, count: 100}}) {{ total relationships {{ type entity {{ urn type ... on Dataset {{ name platform {{ name }} properties {{ name }} }} }} }} }}
+      }}
+      inventories: dataset(urn: "{INVENTORIES_URN}") {{
+        urn name platform {{ name }} properties {{ name description }}
+        structuredProperties {{ properties {{ structuredProperty {{ urn definition {{ qualifiedName }} }} values {{ ... on StringValue {{ stringValue }} ... on NumberValue {{ numberValue }} }} valueEntities {{ __typename ... on CorpUser {{ properties {{ displayName }} }} }} }} }}
       }}
     }}'''

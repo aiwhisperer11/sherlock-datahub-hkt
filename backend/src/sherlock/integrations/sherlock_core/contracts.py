@@ -10,11 +10,11 @@ from datetime import datetime
 import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 from .boundary import validate_unchanged
 
 
-MetadataMode = Literal["auto", "mcp", "graphql", "snapshot"]
+MetadataMode = Literal["auto", "mcp", "graphql", "snapshot", "sandbox"]
 EvidenceProvider = Literal["mcp", "graphql", "snapshot"]
 
 
@@ -75,6 +75,7 @@ class EvidenceSourceReference(DataHubEvidenceSourceReference):
     """Backward-compatible alias with explicit liveness for response provenance."""
     live: bool
 
+    @computed_field(return_type=str)
     @property
     def source_reference(self) -> str:
         return self.query_or_aspect
