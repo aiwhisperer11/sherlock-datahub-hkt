@@ -1,26 +1,35 @@
 # Sherlock Web
 
-Next.js dashboard for the Sherlock stale-pipeline demo.
+Next.js client for the Frozen Dashboard response. It fetches
+`GET /api/v1/demo/frozen-dashboard` from `NEXT_PUBLIC_SHERLOCK_API_URL`
+(default `http://localhost:8000`), then represents the payload, selected
+provider, evidence provenance, simulated inputs, derived hypotheses, and
+limitations. The frontend does not perform the investigation or establish the
+provenance of the returned evidence.
 
 ## Local run
 
-Requires Node.js 20.9+ and the engine running on port 8000.
+Node.js 20.9+ and the backend are required. From the repository root:
 
 ```bash
-cd sherlock-web
-npm install
+cd web
+npm ci
 cp .env.example .env.local
 npm run dev
 ```
 
-Open `http://localhost:3000`. The dashboard calls `GET /api/v1/demo/stale-pipeline` from `NEXT_PUBLIC_SHERLOCK_API_URL` (default: `http://localhost:8000`).
+Open `http://localhost:3000`.
 
-## Validation
+## Available scripts
+
+`package.json` provides the following scripts:
 
 ```bash
+npm run dev
 npm run lint
 npm test
 npm run build
 ```
 
-The visual graph is deliberately componentized but does not yet include React Flow. Vercel compatibility comes from the standard Next.js build; this repository is not configured or deployed to Vercel.
+There is no `start` script, so this README documents the supported development,
+validation, and build scripts only.
