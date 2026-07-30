@@ -20,7 +20,8 @@ The response contains `incident`, `assets`, `observations`, `evidence`, `hypothe
 
 Returns the Frozen Dashboard investigation. Its response deliberately separates `simulated_incident_input`, `observed_from_datahub`, `derived_by_sherlock`, `limitations`, `provider_attempts`, and `selected_provider`.
 
-`SHERLOCK_METADATA_MODE=sandbox` is the default and reads a sanitized verified snapshot. `mcp` and `graphql` use read-only DataHub providers; `auto` tries MCP, GraphQL, then the snapshot. The endpoint does not assert a root cause without operational evidence such as execution logs or live freshness signals.
+`SHERLOCK_METADATA_MODE=sandbox` is the default and reads the local unverified snapshot fixture. Its evidence is `snapshot_fixture`, not live DataHub metadata or freshness. Real read-only `mcp` and `graphql` use `observed_from_datahub`; `auto` tries MCP, GraphQL, then the snapshot. MCP without a token is `not_configured`; attempted MCP errors are `failed`.
+The endpoint does not assert a root cause without operational evidence such as execution logs or live freshness signals.
 
 ## Planned API
 

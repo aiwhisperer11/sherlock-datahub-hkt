@@ -30,7 +30,7 @@ export type FrozenDashboard = {
   observed_from_datahub: DataHubObservation;
   anomalies: { id: string; type: string; title: string; expected: string; observed: string; gap: string; severity: string; provenance: string[]; why_it_matters: string }[];
   initial_hypotheses: { id: string; statement: string; prior_confidence: number; evidence_needed: string[]; status: string }[];
-  evidence: { id: string; statement: string; provenance: "simulated_incident_input" | "observed_from_datahub" | "derived_by_sherlock"; source_reference?: string | null; reliability: number; limitations: string[] }[];
+  evidence: { id: string; statement: string; provenance: "simulated_incident_input" | "observed_from_datahub" | "snapshot_fixture" | "derived_by_sherlock"; source_reference?: string | null; reliability: number; limitations: string[] }[];
   hypothesis_matrix: { hypothesis_id: string; evidence_id: string; relationship: EvidenceRelationship; weight: number; rationale: string }[];
   confidence_update: { hypothesis_id: string; prior_confidence: number; factors: ConfidenceFactor[]; final_confidence: number; explanation: string }[];
   prime_suspect: { hypothesis_id: string; label: string; status: "provisional"; confidence: number; why_selected: string; strongest_supporting_evidence: string; strongest_counterevidence: string; what_would_change_the_verdict: string };
@@ -38,7 +38,7 @@ export type FrozenDashboard = {
   final_result: { verdict: string; verdict_status: "provisional"; confidence: number; affected_assets: string[]; business_impact: string; immediate_action: string; owner_to_contact: string; confirmation_needed: string; guardrail: string };
   derived_by_sherlock: unknown[];
   limitations: string[];
-  provider_attempts: { provider: string; status: "succeeded" | "failed"; duration_ms: number; error?: string | null }[];
+  provider_attempts: { provider: string; status: "succeeded" | "failed" | "not_configured"; duration_ms: number; error?: string | null }[];
   selected_provider: string;
   conclusion: string;
   recommended_action: string;

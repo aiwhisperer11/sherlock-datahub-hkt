@@ -107,7 +107,7 @@ class Investigation(BaseModel):
 
 class ProviderAttempt(BaseModel):
     provider: str
-    status: str
+    status: Literal["succeeded", "failed", "not_configured"]
     duration_ms: int = Field(ge=0)
     error: str | None = None
 
@@ -196,7 +196,7 @@ class InitialHypothesis(BaseModel):
 class InvestigationEvidence(BaseModel):
     id: str
     statement: str
-    provenance: Literal["simulated_incident_input", "observed_from_datahub", "derived_by_sherlock"]
+    provenance: Literal["simulated_incident_input", "observed_from_datahub", "snapshot_fixture", "derived_by_sherlock"]
     source_reference: str | None = None
     reliability: float = Field(ge=0, le=1)
     observed_at: datetime | None = None

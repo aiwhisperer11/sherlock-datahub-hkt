@@ -15,7 +15,7 @@
   },
   "owners": ["David Kim", "Julia Novak"],
   "escalation_contact": "Ian Chen",
-  "tags": ["💲 Large Table", "📈 Most Queried"],
+  "tags": ["Large Table", "Most Queried"],
   "glossary_terms": ["PII", "SOC2 Auditable", "Order Total", "Revenue by Customer Class"],
   "upstream": {
     "direction": "upstream",
@@ -93,7 +93,7 @@
       "escalation_contact": "Sarah Chen"
     }
   ],
-  "source": "snapshot_from_verified_datahub",
+  "source": "local_snapshot_unverified",
   "captured_at": "2026-07-24T00:00:00Z",
-  "warning": "Sanitized snapshot from verified DataHub evidence. It does not represent live freshness."
+  "warning": "Sanitized local snapshot; its original capture is not auditable against the current DataHub response. It does not represent live metadata or freshness."
 }

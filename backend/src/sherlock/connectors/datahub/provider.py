@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
@@ -130,9 +130,9 @@ class GraphQLMetadataProvider:
                 body = json.loads(response.read())
         except (OSError, URLError, TimeoutError, json.JSONDecodeError) as error:
             raise DataHubProviderError("GraphQL metadata request failed") from error
-        if body.get("errors") or not isinstance(body.get("data", {}).get("dataset"), dict):
+        if body.get("errors") or not isinstance(body.get("data"), dict) or not isinstance(body["data"].get("dataset"), dict):
             raise DataHubProviderError("GraphQL metadata response was invalid")
-        return _normalise_graphql_dataset(body["data"]["dataset"])
+        return _normalise_graphql_payload(body["data"])
 
 
 class McpMetadataProvider:
@@ -219,6 +219,11 @@ class DataHubMetadataProvider:
         attempts: list[ProviderAttempt] = []
         for provider_name in order:
             started = time.monotonic()
+            if provider_name == "mcp" and isinstance(self.sources[provider_name], McpMetadataProvider) and not self.settings.token:
+                attempts.append(_attempt(provider_name, "not_configured", started, "MCP requires DATAHUB_GMS_TOKEN"))
+                if mode != "auto":
+                    raise DataHubProviderError("MCP requires DATAHUB_GMS_TOKEN")
+                continue
             try:
                 observed = self.sources[provider_name].fetch()
             except DataHubProviderError as error:
@@ -231,7 +236,7 @@ class DataHubMetadataProvider:
         raise DataHubProviderError("No metadata provider returned evidence")
 
 
-def _attempt(provider: str, status: str, started: float, error: str | None = None) -> ProviderAttempt:
+def _attempt(provider: str, status: Literal["succeeded", "failed", "not_configured"], started: float, error: str | None = None) -> ProviderAttempt:
     return ProviderAttempt(provider=provider, status=status, duration_ms=round((time.monotonic() - started) * 1000), error=error)
 
 
@@ -291,9 +296,15 @@ def _normalise_mcp_lineage(direction: str, payload: dict[str, Any]) -> LineagePa
     )
 
 
-def _normalise_graphql_dataset(dataset: dict[str, Any]) -> DataHubObservation:
+def _normalise_graphql_payload(payload: dict[str, Any]) -> DataHubObservation:
+    dataset = payload["dataset"]
     schema = dataset.get("schemaMetadata") or {}
     downstream = _normalise_graphql_lineage("downstream", dataset.get("downstream") or {})
+    related_assets = [
+        _observed_asset(payload["inventories"])
+        for _ in [None]
+        if isinstance(payload.get("inventories"), dict)
+    ]
     return DataHubObservation(
         urn=str(dataset.get("urn") or ORDER_DETAILS_URN),
         name=str(dataset.get("name") or dataset.get("properties", {}).get("name") or "ORDER_DETAILS"),
@@ -308,6 +319,7 @@ def _normalise_graphql_dataset(dataset: dict[str, Any]) -> DataHubObservation:
         upstream=_normalise_graphql_lineage("upstream", dataset.get("upstream") or {}),
         downstream=downstream,
         consumers=_consumer_entities(downstream.entities),
+        related_assets=related_assets,
         source="graphql",
         captured_at=datetime.now(UTC),
     )
@@ -431,6 +443,7 @@ def _integer(value: Any) -> int | None:
 
 def _build_frozen_dashboard_result(observed: DataHubObservation, attempts: list[ProviderAttempt], selected_provider: str) -> FrozenDashboardResult:
     """Build a deterministic investigation; only telemetry is simulated, never DataHub evidence."""
+    metadata_provenance: Literal["observed_from_datahub", "snapshot_fixture"] = "observed_from_datahub" if selected_provider in {"mcp", "graphql"} else "snapshot_fixture"
     telemetry = [
         SimulatedTelemetry(id="telemetry:dashboard-age", label="Dashboard data age", value_hours=31, context="Reported dashboard symptom."),
         SimulatedTelemetry(id="telemetry:dashboard-expectation", label="Expected dashboard age from DataHub Daily SLA", value_hours=24, context="Expectation derived from observed DataHub SLA."),
@@ -468,17 +481,17 @@ def _build_frozen_dashboard_result(observed: DataHubObservation, attempts: list[
     ]
     evidence = [
         InvestigationEvidence(id="E1", statement="Simulated dashboard telemetry shows data age of 31 hours against a 24-hour expectation.", provenance="simulated_incident_input", source_reference="telemetry:dashboard-age", reliability=0.65, limitations=["Synthetic incident telemetry; it is not a DataHub freshness signal."]),
-        InvestigationEvidence(id="E2", statement="DataHub metadata for ORDER_DETAILS records a Daily freshness SLA.", provenance="observed_from_datahub", source_reference=observed.urn, reliability=0.9, observed_at=observed.captured_at, limitations=["A Daily SLA is an expectation, not the actual latest data timestamp."]),
+        InvestigationEvidence(id="E2", statement="DataHub metadata for ORDER_DETAILS records a Daily freshness SLA.", provenance=metadata_provenance, source_reference=observed.urn, reliability=0.9, observed_at=observed.captured_at, limitations=["A Daily SLA is an expectation, not the actual latest data timestamp."]),
         InvestigationEvidence(id="E3", statement="Simulated incident telemetry reports ORDER_DETAILS at 30 hours old.", provenance="simulated_incident_input", source_reference=observed.urn, reliability=0.65, limitations=["Synthetic incident telemetry; it does not prove a dbt failure."]),
         InvestigationEvidence(id="E4", statement="Simulated incident telemetry reports INVENTORIES at 4 hours old.", provenance="simulated_incident_input", source_reference=INVENTORIES_URN, reliability=0.65, limitations=["Synthetic incident telemetry; live INVENTORIES freshness still needs verification."]),
-        InvestigationEvidence(id="E5", statement=f"DataHub lineage shows {observed.upstream.total or observed.upstream.returned} upstream assets at one hop, including INVENTORIES.", provenance="observed_from_datahub", source_reference=observed.urn, reliability=0.9, observed_at=observed.captured_at, limitations=["Lineage shows dependency structure, not execution status."]),
-        InvestigationEvidence(id="E6", statement=f"DataHub lineage shows {observed.downstream.total or observed.downstream.returned} downstream assets at one hop, including BI consumers.", provenance="observed_from_datahub", source_reference=observed.urn, reliability=0.9, observed_at=observed.captured_at, limitations=["No Power BI refresh timestamp or failure record was observed."]),
-        InvestigationEvidence(id="E7", statement=f"ORDER_DETAILS has {observed.schema_total} schema fields, including quantity_on_hand, stock_status, and updated_at.", provenance="observed_from_datahub", source_reference=observed.urn, reliability=0.9, observed_at=observed.captured_at, limitations=["Observed schema does not establish a recent contract change."]),
+        InvestigationEvidence(id="E5", statement=f"DataHub lineage shows {observed.upstream.total or observed.upstream.returned} upstream assets at one hop, including INVENTORIES.", provenance=metadata_provenance, source_reference=observed.urn, reliability=0.9, observed_at=observed.captured_at, limitations=["Lineage shows dependency structure, not execution status."]),
+        InvestigationEvidence(id="E6", statement=f"DataHub lineage shows {observed.downstream.total or observed.downstream.returned} downstream assets at one hop, including BI consumers.", provenance=metadata_provenance, source_reference=observed.urn, reliability=0.9, observed_at=observed.captured_at, limitations=["No Power BI refresh timestamp or failure record was observed."]),
+        InvestigationEvidence(id="E7", statement=f"ORDER_DETAILS has {observed.schema_total} schema fields, including quantity_on_hand, stock_status, and updated_at.", provenance=metadata_provenance, source_reference=observed.urn, reliability=0.9, observed_at=observed.captured_at, limitations=["Observed schema does not establish a recent contract change."]),
         InvestigationEvidence(id="E8", statement="No query history was retrieved; get_dataset_queries is not used by this read-only investigation path.", provenance="derived_by_sherlock", source_reference=observed.urn, reliability=0.5, limitations=["The absence of retrieved query history is not evidence that no queries or changes occurred."]),
     ]
     for asset in observed.related_assets:
         if asset.urn == INVENTORIES_URN:
-            evidence.append(InvestigationEvidence(id="E9", statement=f"DataHub metadata for INVENTORIES records a {asset.structured_properties.get('showcase.dataFreshnessSla', 'recorded')} SLA, quality score {asset.structured_properties.get('showcase.dataQualityScore', 'not recorded')}, and escalation contact {asset.escalation_contact or 'not recorded'}.", provenance="observed_from_datahub", source_reference=asset.urn, reliability=0.9, observed_at=observed.captured_at, limitations=["Metadata describes the asset but does not provide a live freshness timestamp."]))
+            evidence.append(InvestigationEvidence(id="E9", statement=f"DataHub metadata for INVENTORIES records a {asset.structured_properties.get('showcase.dataFreshnessSla', 'recorded')} SLA, quality score {asset.structured_properties.get('showcase.dataQualityScore', 'not recorded')}, and escalation contact {asset.escalation_contact or 'not recorded'}.", provenance=metadata_provenance, source_reference=asset.urn, reliability=0.9, observed_at=observed.captured_at, limitations=["Metadata describes the asset but does not provide a live freshness timestamp."]))
     matrix = [
         HypothesisMatrixEntry(hypothesis_id="H1", evidence_id="E1", relationship="supports", weight=0.55, rationale="A missing dashboard update establishes a downstream symptom compatible with a stalled transformation."),
         HypothesisMatrixEntry(hypothesis_id="H1", evidence_id="E3", relationship="supports", weight=0.85, rationale="ORDER_DETAILS is already stale in simulated incident telemetry, before the BI layer."),
@@ -570,12 +583,16 @@ def _graphql_query() -> str:
     return f'''query {{
       dataset(urn: "{ORDER_DETAILS_URN}") {{
         urn name platform {{ name }} properties {{ name description }}
-        structuredProperties {{ properties {{ structuredProperty {{ urn definition {{ qualifiedName }} }} values {{ ... on StringValue {{ stringValue }} ... on NumberValue {{ numberValue }} }} valueEntities {{ properties {{ displayName }} }} }} }}
+        structuredProperties {{ properties {{ structuredProperty {{ urn definition {{ qualifiedName }} }} values {{ ... on StringValue {{ stringValue }} ... on NumberValue {{ numberValue }} }} valueEntities {{ __typename ... on CorpUser {{ properties {{ displayName }} }} }} }} }}
         schemaMetadata {{ fields {{ fieldPath nativeDataType description }} }}
         ownership {{ owners {{ owner {{ ... on CorpUser {{ properties {{ displayName }} }} ... on CorpGroup {{ name }} }} }} }}
         tags {{ tags {{ tag {{ properties {{ name }} }} }} }}
         glossaryTerms {{ terms {{ term {{ properties {{ name }} }} }} }}
         upstream: lineage(input: {{direction: UPSTREAM, start: 0, count: 100}}) {{ total relationships {{ type entity {{ urn type ... on Dataset {{ name platform {{ name }} properties {{ name }} }} }} }} }}
         downstream: lineage(input: {{direction: DOWNSTREAM, start: 0, count: 100}}) {{ total relationships {{ type entity {{ urn type ... on Dataset {{ name platform {{ name }} properties {{ name }} }} }} }} }}
+      }}
+      inventories: dataset(urn: "{INVENTORIES_URN}") {{
+        urn name platform {{ name }} properties {{ name description }}
+        structuredProperties {{ properties {{ structuredProperty {{ urn definition {{ qualifiedName }} }} values {{ ... on StringValue {{ stringValue }} ... on NumberValue {{ numberValue }} }} valueEntities {{ __typename ... on CorpUser {{ properties {{ displayName }} }} }} }} }}
       }}
     }}'''

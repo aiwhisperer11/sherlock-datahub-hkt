@@ -1,0 +1,89 @@
+{
+  "data": {
+    "dataset": {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+      "structuredProperties": {
+        "properties": [
+          {
+            "structuredProperty": {
+              "definition": {
+                "qualifiedName": "showcase.dataFreshnessSla"
+              },
+              "urn": "urn:li:structuredProperty:showcase.dataFreshnessSla"
+            },
+            "valueEntities": [],
+            "values": [
+              {
+                "stringValue": "Daily"
+              }
+            ]
+          },
+          {
+            "structuredProperty": {
+              "definition": {
+                "qualifiedName": "showcase.dataQualityScore"
+              },
+              "urn": "urn:li:structuredProperty:showcase.dataQualityScore"
+            },
+            "valueEntities": [],
+            "values": [
+              {
+                "numberValue": 97.5
+              }
+            ]
+          },
+          {
+            "structuredProperty": {
+              "definition": {
+                "qualifiedName": "showcase.retentionPeriod"
+              },
+              "urn": "urn:li:structuredProperty:showcase.retentionPeriod"
+            },
+            "valueEntities": [],
+            "values": [
+              {
+                "stringValue": "1 year"
+              }
+            ]
+          },
+          {
+            "structuredProperty": {
+              "definition": {
+                "qualifiedName": "showcase.costCenter"
+              },
+              "urn": "urn:li:structuredProperty:showcase.costCenter"
+            },
+            "valueEntities": [],
+            "values": [
+              {
+                "stringValue": "Marketing"
+              }
+            ]
+          },
+          {
+            "structuredProperty": {
+              "definition": {
+                "qualifiedName": "showcase.escalationContact"
+              },
+              "urn": "urn:li:structuredProperty:showcase.escalationContact"
+            },
+            "valueEntities": [
+              {
+                "__typename": "CorpUser",
+                "properties": {
+                  "displayName": "[REDACTED]"
+                }
+              }
+            ],
+            "values": [
+              {
+                "stringValue": "urn:li:corpuser:[REDACTED]"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "extensions": {}
+}
