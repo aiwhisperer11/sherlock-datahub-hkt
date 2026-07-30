@@ -202,8 +202,6 @@ def test_auto_marks_mcp_not_configured_before_snapshot_fallback() -> None:
 
     assert result.selected_provider == "snapshot"
     assert [(attempt.provider, attempt.status) for attempt in result.provider_attempts] == [("mcp", "not_configured"), ("graphql", "failed"), ("snapshot", "succeeded")]
-
-
 def test_result_separates_simulated_observed_and_derived() -> None:
     result = DataHubMetadataProvider(DataHubSettings(mode="sandbox"), {"snapshot": StubSource(snapshot())}).load_frozen_dashboard()
 

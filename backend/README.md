@@ -5,7 +5,7 @@ demo endpoints `GET /health`, `GET /api/v1/demo/stale-pipeline`, and
 `GET /api/v1/demo/frozen-dashboard`. The Frozen Dashboard route creates a
 `DataHubMetadataProvider` for each request and builds a deterministic result
 while keeping simulated incident input, provider-backed observations, derived
-content, and limitations distinct.
+content, and limitations distinct. It does not use an LLM.
 
 ## Requirements and installation
 
@@ -33,7 +33,7 @@ credentials out of source, fixtures, browser variables, and test output.
 | `SHERLOCK_CORS_ORIGINS` | Comma-separated browser origins; code default: `http://localhost:3000`. |
 | `SHERLOCK_METADATA_MODE` | `sandbox` (default), `mcp`, `graphql`, or `auto`. |
 | `DATAHUB_GMS_URL` | GMS base URL used by GraphQL and passed to the MCP child; code default: `http://localhost:8080`. |
-| `DATAHUB_GMS_TOKEN` | Optional bearer token for GraphQL and required by the MCP provider. |
+| `DATAHUB_GMS_TOKEN` | Runtime-only bearer token for GraphQL and required by the MCP provider. |
 | `SHERLOCK_DATAHUB_MCP_COMMAND` | Command used to launch the MCP server. |
 | `SHERLOCK_DATAHUB_MCP_PACKAGE` | MCP package argument passed to that command. |
 | `SHERLOCK_DATAHUB_TIMEOUT_SECONDS` | Timeout for provider requests. |

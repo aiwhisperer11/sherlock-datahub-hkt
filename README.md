@@ -55,6 +55,14 @@ Open `http://localhost:3000`. The frontend reads
 `NEXT_PUBLIC_SHERLOCK_API_URL`, whose code default is
 `http://localhost:8000`.
 
+## DataHub evidence modes
+
+The default vertical slice uses a deterministic, clearly labelled local JSON
+snapshot and does not use an LLM. The Frozen Dashboard endpoint also supports
+read-only DataHub MCP and GMS GraphQL providers. In `auto` mode it tries MCP,
+GraphQL, then the snapshot; each provider attempt is returned in the response.
+Snapshot evidence is explicitly marked as non-live freshness evidence.
+
 ## Validation
 
 ```bash
