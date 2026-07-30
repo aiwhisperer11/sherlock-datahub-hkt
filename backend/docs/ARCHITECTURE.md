@@ -21,7 +21,7 @@ SherlockInvestigation 1.0.0 fixture -> existing Sherlock Core normalisation
                                       boundary -> preserved models and tests
 ```
 
-## Backend flow
+`GET /api/v1/demo/frozen-dashboard` creates `DataHubMetadataProvider` for each request. In `sandbox` mode it loads the frozen JSON fixture. In `mcp` or `graphql` mode it retrieves live metadata through the corresponding read-only adapter. In `auto`, the selection order is MCP, GraphQL, snapshot. The first successful source is the only provider used to construct that investigation; previous failures are retained as sanitized `provider_attempts`.
 
 `GET /api/v1/demo/stale-pipeline` loads the labelled JSON fixture, validates
 it into Pydantic models, and returns an `Investigation`.
@@ -63,7 +63,7 @@ The `observed_from_datahub` response-field name alone is not proof of a live
 query. Provenance must be read from the selected provider, observation source,
 and evidence labels.
 
-## Operational properties
+## Sandbox versus live
 
 - CORS origins are configured with `SHERLOCK_CORS_ORIGINS`; the code default
   is `http://localhost:3000`.

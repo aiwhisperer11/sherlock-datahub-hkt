@@ -7,7 +7,7 @@ provider, evidence provenance, simulated inputs, derived hypotheses, and
 limitations. The frontend does not perform the investigation or establish the
 provenance of the returned evidence.
 
-## Local run
+## Requirements and installation
 
 Node.js 20.9+ and the backend are required. From the repository root:
 
