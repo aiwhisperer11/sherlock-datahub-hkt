@@ -165,6 +165,28 @@ class DataHubObservation(BaseModel):
     warning: str | None = None
 
 
+class McpSampleEntity(BaseModel):
+    urn: str
+    type: str
+    name: str
+    platform: str
+    schema_fields: list[str]
+    owners: list[str]
+    glossary_terms: list[str]
+    domains: list[str]
+    upstream_urns: list[str]
+    downstream_urns: list[str]
+
+
+class McpSampleResult(BaseModel):
+    source_mode: Literal["mcp"] = "mcp"
+    source_verified: bool
+    entity_count: int = Field(ge=0)
+    entity: McpSampleEntity
+    captured_at: datetime
+    warnings: list[str]
+
+
 class SimulatedTelemetry(BaseModel):
     id: str
     label: str

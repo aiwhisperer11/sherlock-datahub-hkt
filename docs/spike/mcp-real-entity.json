@@ -1,0 +1,39 @@
+{
+  "captured_at": "2026-07-31T16:36:00Z",
+  "gms_url": "http://localhost:8080",
+  "mcp_tool_used": "search, get_entities, get_lineage",
+  "arguments_sanitized": {
+    "search": { "query": "*", "num_results": 10 },
+    "get_entities": { "urns": ["<entity_urn>"] },
+    "get_lineage": { "urn": "<entity_urn>", "upstream": true, "max_hops": 1, "max_results": 5 }
+  },
+  "entity_count": 1258,
+  "entity_urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.addresses,PROD)",
+  "entity_type": "DATASET",
+  "metadata_fields_present": [
+    "properties.name",
+    "properties.description",
+    "platform",
+    "ownership.owners",
+    "glossaryTerms.terms",
+    "structuredProperties.properties",
+    "domain",
+    "schemaMetadata.fields",
+    "health"
+  ],
+  "reduced_response": {
+    "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.addresses,PROD)",
+    "name": "addresses",
+    "platform": "dbt",
+    "description": "Contains multiple shipping and billing addresses for customers",
+    "owners": ["Data Platform Team", "Ian Chen"],
+    "glossary_terms": ["PII", "Order Total", "Revenue by Customer Class"],
+    "domain": "Data Platform Team",
+    "schema_field_count": 9,
+    "schema_fields_sample": ["address_id", "address_line1", "customer_id", "zipcode"],
+    "upstream_count": 1,
+    "downstream_count": 1
+  },
+  "mutating": false,
+  "graphql_used": false
+}

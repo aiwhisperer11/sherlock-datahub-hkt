@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -26,6 +27,8 @@ from sherlock.domain.models import (
     HypothesisMatrixEntry,
     LineageEntity,
     LineagePage,
+    McpSampleEntity,
+    McpSampleResult,
     PrimeSuspect,
     ProviderAttempt,
     ObservedDataHubAsset,
@@ -37,6 +40,8 @@ from sherlock.domain.models import (
 ORDER_DETAILS_URN = "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
 INVENTORIES_URN = "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.inventories,PROD)"
 _ALLOWED_MCP_TOOLS = {"get_entities", "list_schema_fields", "get_lineage"}
+_ALLOWED_SAMPLE_MCP_TOOLS = {"search", "get_entities", "get_lineage"}
+_URN_TYPE_RE = re.compile(r"^urn:li:([a-zA-Z]+):")
 
 
 class DataHubProviderError(RuntimeError):
@@ -78,6 +83,44 @@ def _extract_mcp_structured_result(result: Any, tool_name: str) -> dict[str, Any
     if len(unique_payloads) > 1:
         raise DataHubProviderError(f"MCP {tool_name} returned ambiguous structured results")
     raise DataHubProviderError(f"MCP {tool_name} returned no structured result")
+
+
+def _require_token(settings: DataHubSettings) -> None:
+    if not settings.token:
+        raise DataHubProviderError("MCP requires DATAHUB_GMS_TOKEN")
+
+
+def _run_mcp_fetch(fetch_coro: Any, timeout_seconds: float) -> Any:
+    """Run an MCP fetch coroutine, sanitising timeouts and SDK/transport exceptions."""
+    try:
+        return asyncio.run(asyncio.wait_for(fetch_coro, timeout=timeout_seconds))
+    except TimeoutError as error:
+        raise DataHubProviderError("MCP metadata request timed out") from error
+    except DataHubProviderError:
+        raise
+    except Exception as error:  # SDK and transport exceptions are deliberately sanitised.
+        raise DataHubProviderError("MCP metadata request failed") from error
+
+
+def _build_stdio_parameters(settings: DataHubSettings) -> Any:
+    from mcp import StdioServerParameters
+
+    return StdioServerParameters(
+        command=settings.mcp_command,
+        args=[settings.mcp_package],
+        env={
+            "DATAHUB_GMS_URL": settings.gms_url,
+            "DATAHUB_GMS_TOKEN": settings.token,
+            "TOOLS_IS_MUTATION_ENABLED": "false",
+        },
+    )
+
+
+async def _call_mcp_tool(session: Any, tool_name: str, arguments: dict[str, Any], allowed_tools: set[str]) -> dict[str, Any]:
+    if tool_name not in allowed_tools:
+        raise DataHubProviderError("MCP mutation tools are not permitted")
+    result = await session.call_tool(tool_name, arguments)
+    return _extract_mcp_structured_result(result, tool_name)
 
 
 @dataclass(frozen=True)
@@ -140,30 +183,14 @@ class McpMetadataProvider:
         self.settings = settings
 
     def fetch(self) -> DataHubObservation:
-        if not self.settings.token:
-            raise DataHubProviderError("MCP requires DATAHUB_GMS_TOKEN")
-        try:
-            return asyncio.run(asyncio.wait_for(self._fetch(), timeout=self.settings.timeout_seconds))
-        except TimeoutError as error:
-            raise DataHubProviderError("MCP metadata request timed out") from error
-        except DataHubProviderError:
-            raise
-        except Exception as error:  # SDK and transport exceptions are deliberately sanitised.
-            raise DataHubProviderError("MCP metadata request failed") from error
+        _require_token(self.settings)
+        return _run_mcp_fetch(self._fetch(), self.settings.timeout_seconds)
 
     async def _fetch(self) -> DataHubObservation:
-        from mcp import ClientSession, StdioServerParameters
+        from mcp import ClientSession
         from mcp.client.stdio import stdio_client
 
-        parameters = StdioServerParameters(
-            command=self.settings.mcp_command,
-            args=[self.settings.mcp_package],
-            env={
-                "DATAHUB_GMS_URL": self.settings.gms_url,
-                "DATAHUB_GMS_TOKEN": self.settings.token,
-                "TOOLS_IS_MUTATION_ENABLED": "false",
-            },
-        )
+        parameters = _build_stdio_parameters(self.settings)
         async with stdio_client(parameters) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
@@ -190,10 +217,71 @@ class McpMetadataProvider:
         return _normalise_mcp(entities, fields, upstream, downstream)
 
     async def _call(self, session: Any, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        if tool_name not in _ALLOWED_MCP_TOOLS:
-            raise DataHubProviderError("MCP mutation tools are not permitted")
-        result = await session.call_tool(tool_name, arguments)
-        return _extract_mcp_structured_result(result, tool_name)
+        return await _call_mcp_tool(session, tool_name, arguments, _ALLOWED_MCP_TOOLS)
+
+
+class McpSampleProvider:
+    """Discovers one real DataHub entity over MCP and normalises it for the minimal sample endpoint.
+
+    Unlike McpMetadataProvider, this does not target a fixed URN: it searches DataHub for
+    whatever entities actually exist, so it works against any DataHub instance's real data.
+    """
+
+    def __init__(self, settings: DataHubSettings | None = None) -> None:
+        self.settings = settings or DataHubSettings.from_environment()
+
+    def fetch_sample(self) -> McpSampleResult:
+        if self.settings.mode != "mcp":
+            raise DataHubProviderError("MCP sample requires SHERLOCK_METADATA_MODE=mcp")
+        _require_token(self.settings)
+        return _run_mcp_fetch(self._fetch(), self.settings.timeout_seconds)
+
+    async def _fetch(self) -> McpSampleResult:
+        from mcp import ClientSession
+        from mcp.client.stdio import stdio_client
+
+        parameters = _build_stdio_parameters(self.settings)
+        async with stdio_client(parameters) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                listed = await session.list_tools()
+                listed_names = {tool.name for tool in listed.tools}
+                if not _ALLOWED_SAMPLE_MCP_TOOLS.issubset(listed_names):
+                    raise DataHubProviderError("MCP read tools required for the sample endpoint are unavailable")
+
+                urn = await self._discover(session)
+                entities = await self._call(session, "get_entities", {"urns": [urn]})
+                upstream = await self._call(
+                    session,
+                    "get_lineage",
+                    {"urn": urn, "column": None, "query": "*", "upstream": True, "max_hops": 1, "max_results": 10, "offset": 0},
+                )
+                downstream = await self._call(
+                    session,
+                    "get_lineage",
+                    {"urn": urn, "column": None, "query": "*", "upstream": False, "max_hops": 1, "max_results": 10, "offset": 0},
+                )
+        return _normalise_mcp_sample(entities, upstream, downstream)
+
+    async def _discover(self, session: Any) -> str:
+        """Return the URN of one real entity, preferring a DATASET, from a broad search."""
+        result = await self._call(session, "search", {"query": "*", "num_results": 10})
+        raw_results = result.get("searchResults", result.get("results", []))
+        if not isinstance(raw_results, list):
+            raise DataHubProviderError("MCP search response was invalid")
+        candidates = [item.get("entity") for item in raw_results if isinstance(item, dict) and isinstance(item.get("entity"), dict)]
+        total = _integer(result.get("total")) or len(candidates)
+        if total == 0 or not candidates:
+            raise DataHubProviderError("MCP search returned zero entities")
+        dataset = next((item for item in candidates if str(item.get("urn", "")).startswith("urn:li:dataset:")), None)
+        chosen = dataset or candidates[0]
+        urn = chosen.get("urn")
+        if not urn:
+            raise DataHubProviderError("MCP search result was missing a urn")
+        return str(urn)
+
+    async def _call(self, session: Any, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        return await _call_mcp_tool(session, tool_name, arguments, _ALLOWED_SAMPLE_MCP_TOOLS)
 
 
 class DataHubMetadataProvider:
@@ -294,6 +382,66 @@ def _normalise_mcp_lineage(direction: str, payload: dict[str, Any]) -> LineagePa
         has_more=metadata.get("hasMore") if isinstance(metadata.get("hasMore"), bool) else None,
         entities=normalised,
     )
+
+
+def _normalise_mcp_sample(entities: dict[str, Any], upstream: dict[str, Any], downstream: dict[str, Any]) -> McpSampleResult:
+    entity_list = entities.get("entities", entities.get("results", entities.get("result", [])))
+    if not isinstance(entity_list, list) or not entity_list:
+        raise DataHubProviderError("MCP did not return entity details")
+    raw = entity_list[0]
+    if not isinstance(raw, dict):
+        raise DataHubProviderError("MCP entity response was invalid")
+
+    urn = str(raw.get("urn") or "unknown")
+    schema_fields = raw.get("schemaMetadata", {}).get("fields", [])
+    entity = McpSampleEntity(
+        urn=urn,
+        type=_entity_type_from_urn(urn),
+        name=str(raw.get("name") or raw.get("properties", {}).get("name") or "unknown"),
+        platform=_platform_name(raw),
+        schema_fields=[str(field["fieldPath"]) for field in schema_fields if isinstance(field, dict) and field.get("fieldPath")],
+        owners=_owners(raw),
+        glossary_terms=_terms(raw),
+        domains=_domains(raw),
+        upstream_urns=_lineage_urns(upstream, "upstream"),
+        downstream_urns=_lineage_urns(downstream, "downstream"),
+    )
+    return McpSampleResult(source_mode="mcp", source_verified=True, entity_count=1, entity=entity, captured_at=datetime.now(UTC), warnings=[])
+
+
+def _entity_type_from_urn(urn: str) -> str:
+    match = _URN_TYPE_RE.match(urn)
+    return match.group(1).upper() if match else "UNKNOWN"
+
+
+def _domains(value: dict[str, Any]) -> list[str]:
+    domain = value.get("domain", {}).get("domain")
+    if isinstance(domain, dict):
+        name = domain.get("properties", {}).get("name")
+        if name:
+            return [str(name)]
+    return []
+
+
+def _lineage_urns(payload: dict[str, Any], direction: str) -> list[str]:
+    raw = payload.get(f"{direction}s", payload)
+    if isinstance(raw, dict):
+        results = raw.get("searchResults", raw.get("entities", raw.get("results", [])))
+    elif isinstance(raw, list):
+        results = raw
+    else:
+        return []
+    if not isinstance(results, list):
+        return []
+    urns: list[str] = []
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        entity = item.get("entity") if isinstance(item.get("entity"), dict) else item
+        urn = entity.get("urn")
+        if urn:
+            urns.append(str(urn))
+    return urns
 
 
 def _normalise_graphql_payload(payload: dict[str, Any]) -> DataHubObservation:

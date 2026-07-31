@@ -16,6 +16,7 @@ export type DataHubObservation = {
   consumers: LineageEntity[];
   related_assets: { urn: string; name: string; platform: string; structured_properties: Record<string, string | number>; escalation_contact?: string | null }[];
   source: string;
+  captured_at?: string | null;
   warning?: string | null;
 };
 
@@ -46,8 +47,21 @@ export type FrozenDashboard = {
 
 export const apiUrl = (process.env.NEXT_PUBLIC_SHERLOCK_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
 
+/** Reads a FastAPI-style `{ detail }` error body, if the backend sent one. Never throws. */
+export async function readErrorDetail(response: Response): Promise<string | null> {
+  try {
+    const body = (await response.json()) as { detail?: unknown };
+    return typeof body.detail === "string" ? body.detail : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchFrozenDashboard(): Promise<FrozenDashboard> {
   const response = await fetch(`${apiUrl}/api/v1/demo/frozen-dashboard`);
-  if (!response.ok) throw new Error(`Engine responded with ${response.status}`);
+  if (!response.ok) {
+    const detail = await readErrorDetail(response);
+    throw new Error(detail ?? `Engine responded with ${response.status}`);
+  }
   return response.json() as Promise<FrozenDashboard>;
 }
