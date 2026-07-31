@@ -1,0 +1,23 @@
+{
+  "case_id": "real-governance-inventory-warehouse",
+  "title": "Misaligned governance terms across inventory and warehouse assets",
+  "snapshots": [
+    {
+      "file": "iteration_1.json",
+      "sha256": "823f275d607dfa69f013ec69a6a7e69c95d16a5b5ba98105080eca57eeec289f",
+      "validation": "pass"
+    },
+    {
+      "file": "iteration_2.json",
+      "sha256": "3d26c735e2f841fc2efdb48df8f59c89fd93dcb141a091517c4089858c0c32fb",
+      "validation": "pass"
+    }
+  ],
+  "schema_version": "1.0.0",
+  "schema_path": "backend/src/sherlock/integrations/sherlock_core/schemas/sherlock-investigation-1.0.0.schema.json",
+  "evidence_source": "captured_live_metadata",
+  "mutation_performed": false,
+  "ingestion_performed": false,
+  "root_cause_proven": false,
+  "note": "These are Sherlock investigation results derived from previously captured live evidence, not raw MCP responses. Raw MCP responses, if retained, remain separate."
+}
