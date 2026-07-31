@@ -1,0 +1,8 @@
+{
+  "status": "blocked",
+  "generated_at": "2026-07-23",
+  "server_connected": false,
+  "tools": [],
+  "reason": "A temporary Compose override rendered MySQL as 53306->3306, but the recreated datahub-mysql-1 container still had HostPort 3306. Direct Compose also failed because Quickstart runtime variables were unset, leaving acryldata/datahub-gms: as an invalid image reference. GMS never started, so no MCP Server connection was established. This inventory intentionally does not infer tool availability from documentation.",
+  "next_action": "Resolve the Docker port-publication failure, require a healthy local GMS endpoint, then start the official self-hosted MCP Server with runtime-only credentials and record the server-reported tool list."
+}

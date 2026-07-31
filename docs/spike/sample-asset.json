@@ -1,0 +1,13 @@
+{
+  "status": "blocked",
+  "asset": null,
+  "urn": null,
+  "metadata": null,
+  "schema": null,
+  "ownership": null,
+  "tags": null,
+  "lineage": null,
+  "freshness_or_quality_signals": null,
+  "reason": "The local Quickstart did not reach GMS or frontend. A Compose override rendered 53306->3306 but the recreated MySQL container retained HostPort 3306, while direct Compose failed on an invalid GMS image reference due to unset Quickstart runtime variables. No nyc-taxi datapack was loaded, no real asset query was executed, and no URN was invented.",
+  "next_action": "Capture a sanitized response from a successful read-only query after Docker port publication is fixed, Quickstart is healthy, and the actual datapack command has been discovered."
+}
