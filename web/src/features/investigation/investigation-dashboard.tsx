@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { StatusPill } from "@/components/status-pill";
+import { McpSamplePanel } from "@/features/mcp-sample/mcp-sample-panel";
 import { fetchFrozenDashboard, type FrozenDashboard } from "@/lib/investigation";
 import { InvestigationNarrative } from "./investigation-components";
 
@@ -25,6 +26,7 @@ export function InvestigationDashboard() {
       {investigation && <StatusPill state="success">Backend connected · {investigation.selected_provider} provider selected · provisional investigation</StatusPill>}
       {error && <StatusPill state="error">Backend unavailable · {error}</StatusPill>}
       {investigation && <div className="investigation-flow" aria-label="Frozen dashboard investigation"><InvestigationNarrative investigation={investigation} /></div>}
+      <McpSamplePanel />
     </main>
   );
 }

@@ -1,3 +1,3 @@
-from .provider import DataHubMetadataProvider
+from .provider import DataHubMetadataProvider, DataHubProviderError, McpSampleProvider
 
-__all__ = ["DataHubMetadataProvider"]
+__all__ = ["DataHubMetadataProvider", "DataHubProviderError", "McpSampleProvider"]

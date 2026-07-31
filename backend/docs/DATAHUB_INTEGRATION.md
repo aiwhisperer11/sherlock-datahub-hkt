@@ -22,3 +22,7 @@
 `GET /api/v1/demo/frozen-dashboard` separates simulated incident input, live `observed_from_datahub` when available, snapshot-backed `snapshot_fixture` evidence when sandbox is selected, `derived_by_sherlock`, `limitations`, `provider_attempts`, and `selected_provider`. MCP without a token is `not_configured`; an attempted MCP error is `failed`.
 
 The initial dashboard symptom is simulated. Metadata evidence can support hypotheses, but the implementation never claims a root cause without operational logs or other confirming evidence.
+
+## MCP sample endpoint
+
+`McpSampleProvider` (`GET /api/v1/metadata/mcp/sample`) is a separate, generic read path: it does not target a fixed URN. It calls the MCP `search` tool with a broad query, prefers the first `DATASET` result, then fetches that entity plus one-hop lineage via `get_entities`/`get_lineage`. It never falls back to GraphQL or a snapshot fixture — a missing token, an MCP failure, or a zero-entity search all raise an explicit, sanitised `DataHubProviderError`.

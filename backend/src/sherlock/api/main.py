@@ -1,11 +1,11 @@
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from sherlock.connectors.datahub import DataHubMetadataProvider
+from sherlock.connectors.datahub import DataHubMetadataProvider, DataHubProviderError, McpSampleProvider
 from sherlock.connectors.sandbox import SandboxMetadataProvider
-from sherlock.domain.models import FrozenDashboardResult, Investigation
+from sherlock.domain.models import FrozenDashboardResult, Investigation, McpSampleResult
 
 app = FastAPI(title="Sherlock Engine", version="0.1.0")
 
@@ -34,3 +34,11 @@ def stale_pipeline_demo() -> Investigation:
 @app.get("/api/v1/demo/frozen-dashboard", response_model=FrozenDashboardResult)
 def frozen_dashboard_demo() -> FrozenDashboardResult:
     return DataHubMetadataProvider().load_frozen_dashboard()
+
+
+@app.get("/api/v1/metadata/mcp/sample", response_model=McpSampleResult)
+def mcp_sample() -> McpSampleResult:
+    try:
+        return McpSampleProvider().fetch_sample()
+    except DataHubProviderError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
