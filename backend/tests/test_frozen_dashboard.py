@@ -72,6 +72,21 @@ def test_mcp_response_maps_to_internal_models() -> None:
     assert observed.consumers[0].platform == "powerbi"
 
 
+def test_mcp_response_maps_real_get_entities_result_key() -> None:
+    """get_entities from the real mcp-server-datahub server nests entities under "result", not
+    "entities" or "results" — confirmed empirically against a live DataHub OSS 1.5.0.6 instance
+    with mcp-server-datahub 0.6.0. _normalise_mcp must accept that shape too."""
+    entities = {"result": [{"urn": ORDER_DETAILS_URN, "name": "ORDER_DETAILS", "platform": {"name": "snowflake"}}]}
+    fields = {"totalFields": 1, "fields": [{"fieldPath": "quantity_on_hand", "nativeDataType": "NUMBER"}]}
+    upstream = {"upstreams": {"total": 0, "returned": 0, "offset": 0, "hasMore": False, "entities": []}}
+    downstream = {"downstreams": {"total": 0, "returned": 0, "offset": 0, "hasMore": False, "entities": []}}
+
+    observed = _normalise_mcp(entities, fields, upstream, downstream)
+
+    assert observed.urn == ORDER_DETAILS_URN
+    assert observed.name == "ORDER_DETAILS"
+
+
 def test_mcp_rejects_tools_outside_read_allowlist() -> None:
     provider = McpMetadataProvider(DataHubSettings(token="not-printed"))
 
@@ -328,6 +343,33 @@ def test_frozen_dashboard_sandbox_requires_no_network_or_token(monkeypatch: pyte
     assert response.status_code == 200
     assert response.json()["selected_provider"] == "snapshot"
     assert response.json()["provider_attempts"][0]["provider"] == "snapshot"
+
+
+@pytest.mark.parametrize("mode", ["mcp", "graphql", "auto", "not-a-real-mode", ""])
+def test_frozen_dashboard_endpoint_ignores_metadata_mode(monkeypatch: pytest.MonkeyPatch, mode: str) -> None:
+    """The endpoint must always resolve to snapshot, regardless of SHERLOCK_METADATA_MODE.
+
+    Frozen Dashboard and the live MCP sample panel are separate features and must not
+    share one global mode switch (see docs/DATAHUB_INTEGRATION.md).
+    """
+    monkeypatch.setenv("SHERLOCK_METADATA_MODE", mode)
+    monkeypatch.delenv("DATAHUB_GMS_TOKEN", raising=False)
+
+    response = TestClient(app).get("/api/v1/demo/frozen-dashboard")
+
+    assert response.status_code == 200
+    assert response.json()["selected_provider"] == "snapshot"
+
+
+def test_load_frozen_dashboard_from_snapshot_never_raises_unsupported_mode() -> None:
+    provider = DataHubMetadataProvider(DataHubSettings(mode="not-a-real-mode"))
+
+    result = provider.load_frozen_dashboard_from_snapshot()
+
+    assert result.selected_provider == "snapshot"
+    assert len(result.provider_attempts) == 1
+    assert result.provider_attempts[0].provider == "snapshot"
+    assert result.provider_attempts[0].status == "succeeded"
 
 
 def test_mcp_result_content_without_an_object_is_sanitised() -> None:

@@ -27,11 +27,17 @@ SherlockInvestigation 1.0.0 fixture -> existing Sherlock Core normalisation
 it into Pydantic models, and returns an `Investigation`.
 
 `GET /api/v1/demo/frozen-dashboard` creates `DataHubMetadataProvider` per
-request. In `sandbox` mode it reads the frozen JSON fixture. In `mcp` or
-`graphql` mode it uses only that selected adapter. In `auto`, the selection
-order is MCP, GraphQL, then snapshot; failed attempts are retained as
-sanitised `provider_attempts`, and the first successful provider supplies the
-observation used to build the result.
+request and always calls `load_frozen_dashboard_from_snapshot()`, which reads
+the frozen JSON fixture unconditionally — it does not consult
+`SHERLOCK_METADATA_MODE`. The mode-driven `load_frozen_dashboard()` method
+(sandbox/mcp/graphql/auto selection, MCP then GraphQL then snapshot in `auto`)
+still exists and is unit-tested but is not wired to any HTTP endpoint; it is
+kept for a possible future operator-configurable live mode. This separation
+is deliberate: the Frozen Dashboard demo and the live MCP sample panel
+(`GET /api/v1/metadata/mcp/sample`, always `McpSampleProvider`) are
+independent features and must not share one global mode switch — a prior
+version coupled them through `SHERLOCK_METADATA_MODE`, so configuring the
+live MCP panel silently broke the Frozen Dashboard demo.
 
 The result carries parallel provenance instead of merging claims:
 `simulated_incident_input`, `observed_from_datahub`, and

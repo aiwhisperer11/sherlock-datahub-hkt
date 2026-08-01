@@ -92,6 +92,36 @@ def test_missing_token_is_explicit_and_does_not_run_mcp() -> None:
         provider.fetch_sample()
 
 
+@pytest.mark.parametrize("mode", ["sandbox", "graphql", "auto", "not-a-real-mode", ""])
+def test_fetch_sample_does_not_depend_on_metadata_mode(monkeypatch: pytest.MonkeyPatch, mode: str) -> None:
+    """The MCP sample endpoint is inherently MCP-only; it must not gate on SHERLOCK_METADATA_MODE.
+
+    Frozen Dashboard and the live MCP sample panel are separate features and must not
+    share one global mode switch (see docs/DATAHUB_INTEGRATION.md).
+    """
+    provider = McpSampleProvider(DataHubSettings(mode=mode, token="not-printed"))
+    entity = McpSampleEntity(
+        urn="urn:li:dataset:(urn:li:dataPlatform:dbt,x.y.z,PROD)",
+        type="DATASET",
+        name="z",
+        platform="dbt",
+        schema_fields=[],
+        owners=[],
+        glossary_terms=[],
+        domains=[],
+        upstream_urns=[],
+        downstream_urns=[],
+    )
+    sample = McpSampleResult(source_mode="mcp", source_verified=True, entity_count=1, entity=entity, captured_at=datetime.now(UTC), warnings=[])
+
+    async def fake_fetch() -> McpSampleResult:
+        return sample
+
+    monkeypatch.setattr(provider, "_fetch", fake_fetch)
+
+    assert provider.fetch_sample() == sample
+
+
 def test_mcp_sample_failure_is_sanitised(monkeypatch: pytest.MonkeyPatch) -> None:
     token = "token-that-must-not-appear"
     provider = McpSampleProvider(DataHubSettings(mode="mcp", token=token))

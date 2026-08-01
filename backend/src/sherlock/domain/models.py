@@ -325,3 +325,14 @@ class FrozenDashboardResult(BaseModel):
     selected_provider: str
     conclusion: str
     recommended_action: str
+
+
+class WritebackResult(BaseModel):
+    urn: str
+    investigation_id: str
+    description_written: bool
+    tag_added: bool
+    verified: bool
+    already_published: bool
+    degraded: bool
+    detail: str

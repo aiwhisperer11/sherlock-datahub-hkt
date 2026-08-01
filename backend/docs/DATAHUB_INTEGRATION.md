@@ -2,13 +2,13 @@
 
 ## Current behavior
 
-`DataHubMetadataProvider` supports the Frozen Dashboard demo through three read-only sources:
+`GET /api/v1/demo/frozen-dashboard` always uses `DataHubMetadataProvider.load_frozen_dashboard_from_snapshot()`, which always reads the local snapshot fixture (`SnapshotMetadataProvider`). It does not read `SHERLOCK_METADATA_MODE` and cannot select MCP or GraphQL. This is deliberate: the endpoint backs the frontend's deterministic "Snapshot (demo)" investigation and must keep working regardless of how live metadata acquisition is configured elsewhere.
 
-1. DataHub MCP (`mcp`) using only `get_entities`, `list_schema_fields`, and `get_lineage`.
-2. GMS GraphQL (`graphql`) at `${DATAHUB_GMS_URL}/api/graphql`.
-3. A local unverified snapshot fixture (`sandbox`).
+`DataHubMetadataProvider.load_frozen_dashboard()` (mode-driven: `sandbox`/`mcp`/`graphql`/`auto`, trying MCP then GraphQL then the snapshot) still exists and is unit-tested, but no HTTP endpoint currently calls it. It is retained for any future operator-configurable live mode, not wired to the API today.
 
-`auto` tries MCP, GraphQL, then the snapshot. Each attempt is emitted with its provider, status, duration, and sanitized failure reason. Evidence is selected from one provider per response; it is never silently merged.
+`GET /api/v1/metadata/mcp/sample` always uses `McpSampleProvider`, which is unconditionally MCP-only — it only requires `DATAHUB_GMS_TOKEN`, and does not read `SHERLOCK_METADATA_MODE` either.
+
+`SHERLOCK_METADATA_MODE` therefore has no effect on either live HTTP endpoint. The two features were previously coupled to this single env var — setting it to enable one silently broke the other. See the incident this fixed: a demo deploy where `SHERLOCK_METADATA_MODE` was set for the MCP sample panel, which made `/api/v1/demo/frozen-dashboard` raise `Unsupported SHERLOCK_METADATA_MODE` and return 500.
 
 ## Safety
 
@@ -19,7 +19,7 @@
 
 ## Endpoint contract
 
-`GET /api/v1/demo/frozen-dashboard` separates simulated incident input, live `observed_from_datahub` when available, snapshot-backed `snapshot_fixture` evidence when sandbox is selected, `derived_by_sherlock`, `limitations`, `provider_attempts`, and `selected_provider`. MCP without a token is `not_configured`; an attempted MCP error is `failed`.
+`GET /api/v1/demo/frozen-dashboard` separates simulated incident input from `observed_from_datahub` (always `snapshot_fixture` provenance today), `derived_by_sherlock`, `limitations`, `provider_attempts`, and `selected_provider` (always `"snapshot"`).
 
 The initial dashboard symptom is simulated. Metadata evidence can support hypotheses, but the implementation never claims a root cause without operational logs or other confirming evidence.
 

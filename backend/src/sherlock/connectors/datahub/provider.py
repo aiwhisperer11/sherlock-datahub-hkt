@@ -6,7 +6,7 @@ import os
 import re
 import time
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, Protocol
@@ -143,6 +143,15 @@ class DataHubSettings:
             timeout_seconds=float(os.getenv("SHERLOCK_DATAHUB_TIMEOUT_SECONDS", "15")),
         )
 
+    @classmethod
+    def from_environment_forced_to_mode(cls, mode: str) -> DataHubSettings:
+        """Same as from_environment(), but with mode pinned regardless of SHERLOCK_METADATA_MODE.
+
+        Used by call sites that must never fall back to GraphQL, snapshot, or auto — e.g. the
+        writeback flow, which requires evidence from a real MCP read.
+        """
+        return replace(cls.from_environment(), mode=mode)
+
 
 class FrozenDashboardSource(Protocol):
     def fetch(self) -> DataHubObservation:
@@ -231,8 +240,6 @@ class McpSampleProvider:
         self.settings = settings or DataHubSettings.from_environment()
 
     def fetch_sample(self) -> McpSampleResult:
-        if self.settings.mode != "mcp":
-            raise DataHubProviderError("MCP sample requires SHERLOCK_METADATA_MODE=mcp")
         _require_token(self.settings)
         return _run_mcp_fetch(self._fetch(), self.settings.timeout_seconds)
 
@@ -299,6 +306,17 @@ class DataHubMetadataProvider:
         """The legacy stale-pipeline endpoint remains owned by SandboxMetadataProvider."""
         raise NotImplementedError("Use SandboxMetadataProvider for the stale-pipeline demo")
 
+    def load_frozen_dashboard_from_snapshot(self) -> FrozenDashboardResult:
+        """Always uses the snapshot fixture, independent of SHERLOCK_METADATA_MODE.
+
+        The Frozen Dashboard demo and the live MCP sample panel are separate features;
+        they must not share a single mode switch (see docs/DATAHUB_INTEGRATION.md).
+        """
+        started = time.monotonic()
+        observed = self.sources["snapshot"].fetch()
+        attempts = [_attempt("snapshot", "succeeded", started)]
+        return _build_frozen_dashboard_result(observed, attempts, "snapshot")
+
     def load_frozen_dashboard(self) -> FrozenDashboardResult:
         mode = self.settings.mode
         if mode not in {"sandbox", "mcp", "graphql", "auto"}:
@@ -329,7 +347,7 @@ def _attempt(provider: str, status: Literal["succeeded", "failed", "not_configur
 
 
 def _normalise_mcp(entities: dict[str, Any], fields: dict[str, Any], upstream: dict[str, Any], downstream: dict[str, Any]) -> DataHubObservation:
-    entity_list = entities.get("entities", entities.get("results", entities))
+    entity_list = entities.get("entities", entities.get("results", entities.get("result", entities)))
     if not isinstance(entity_list, list):
         raise DataHubProviderError("MCP entity response was invalid")
     central = next((item for item in entity_list if isinstance(item, dict) and item.get("urn") == ORDER_DETAILS_URN), None)
