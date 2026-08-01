@@ -151,7 +151,7 @@ class FrozenDashboardSource(Protocol):
 
 class SnapshotMetadataProvider:
     def __init__(self, fixture_path: Path | None = None) -> None:
-        self.fixture_path = fixture_path or Path(__file__).resolve().parents[4] / "fixtures" / "frozen_dashboard_snapshot.json"
+        self.fixture_path = fixture_path or Path(__file__).resolve().parent / "fixtures" / "frozen_dashboard_snapshot.json"
 
     def fetch(self) -> DataHubObservation:
         with self.fixture_path.open(encoding="utf-8") as fixture:
