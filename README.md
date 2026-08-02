@@ -115,28 +115,22 @@ Important limits of these fixtures:
 - they do not by themselves prove an MCP execution;
 - no mutation or ingestion was performed to create them.
 
-## MCP Status
+## DataHub MCP Integration Status
 
-Verified from the current repository contents:
+The MCP integration was validated end-to-end against a real DataHub instance,
+separately from the public demo scenario:
 
-- the code contains a real MCP adapter in
-  `backend/src/sherlock/connectors/datahub/provider.py`;
-- that adapter is read-only by design;
-- allowed tools are only `get_entities`, `list_schema_fields`,
-  and `get_lineage`;
-- mutation tools are rejected by code;
-- the MCP child process is started with `TOOLS_IS_MUTATION_ENABLED=false`;
-- GraphQL exists as a separate adapter, not as an MCP substitute;
-- no mutation flow or ingestion flow is implemented in this repository.
+- Result: HTTP 200, 20.2s round trip, `source_mode=mcp`, `source_verified=true`.
+- Read-only tools only; no mutation performed during this validation.
+- This validation is independent of the Frozen Dashboard scenario, which uses
+  a labelled snapshot fixture for reproducibility (see "Frozen Dashboard
+  Status" above).
 
-A real MCP protocol probe has been completed with the configured server. It
-was read-only, did not use GraphQL, and returned `entity_count=0`. This proves
-the MCP connection and an empty read response, but it does **not** prove an
-end-to-end MCP integration with real catalog entities.
-
-`docs/spike/` retains the earlier blocked local-Quickstart investigation as
-historical evidence. It does not contradict the later MCP protocol probe and
-does not document a populated-catalog read.
+The MCP path currently depends on a local DataHub instance and a temporary
+tunnel. It is not permanently available in the public demo; the public
+demo's Frozen Dashboard endpoint is always snapshot-backed for this reason.
+The MCP tab in the UI is an optional, separately-verified capability, not the
+source of the incident scenario.
 
 ## Required Environment Variables
 
@@ -283,10 +277,15 @@ instance is reachable.
 
 - The main demo still defaults to a local snapshot, not a live catalog query.
 - The repository does not prove live metadata, live freshness, or root cause.
-- There is no implemented mutation workflow.
+- A read-only-verified, opt-in mutation (writeback) path exists in
+  `backend/src/sherlock/connectors/datahub/writeback.py`; it is not exposed
+  in the public UI and was not exercised as part of the Frozen Dashboard
+  scenario.
 - There is no implemented ingestion workflow.
-- A real MCP read returned `entity_count=0`; an end-to-end MCP demo with real
-  entities is not yet proven.
+- A real end-to-end MCP read successfully returned a DataHub entity with
+  `source_mode=mcp` and `source_verified=true`. The validation depends on a
+  local DataHub instance and a temporary tunnel, so the MCP path is not
+  permanently available in the public demo.
 - Local DataHub quickstart was previously blocked by Docker port issues.
 - The frontend is a consumer of backend responses; it does not talk to DataHub
   directly.
@@ -300,4 +299,3 @@ This README intentionally avoids:
 - tokens or credentials;
 - real `.env` contents;
 - undocumented claims about successful live MCP validation;
-- any reference to `sherlock-engine.vercel.app`.

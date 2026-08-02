@@ -12,6 +12,8 @@ const FETCHERS: Record<SampleMode, () => Promise<SampleView>> = {
 };
 
 const MODE_LABEL: Record<SampleMode, string> = { mcp: "MCP (live)", snapshot: "Snapshot (demo)" };
+const SAMPLE_LABEL: Record<SampleMode, string> = { mcp: "Live metadata sample", snapshot: "Demo metadata sample" };
+const SAMPLE_TITLE: Record<SampleMode, string> = { mcp: "One real DataHub entity via MCP", snapshot: "One demo DataHub entity from the snapshot" };
 
 export function loadingLabel(mode: SampleMode): string {
   return `Fetching ${mode === "mcp" ? "live MCP" : "snapshot"} metadata…`;
@@ -22,7 +24,7 @@ export function errorLabel(mode: SampleMode, message: string): string {
 }
 
 export function McpSamplePanel() {
-  const [mode, setMode] = useState<SampleMode>("mcp");
+  const [mode, setMode] = useState<SampleMode>("snapshot");
   const [state, setState] = useState<LoadState>({ status: "loading" });
 
   useEffect(() => {
@@ -44,8 +46,8 @@ export function McpSamplePanel() {
     <section className="section mcp-sample-section" aria-labelledby="mcp-sample-title">
       <div className="mcp-sample-head">
         <div>
-          <p className="section-label">Live metadata sample</p>
-          <h2 id="mcp-sample-title">One real DataHub entity via MCP</h2>
+          <p className="section-label">{SAMPLE_LABEL[mode]}</p>
+          <h2 id="mcp-sample-title">{SAMPLE_TITLE[mode]}</h2>
         </div>
         <div className="mode-toggle" role="tablist" aria-label="Metadata source">
           {(Object.keys(MODE_LABEL) as SampleMode[]).map((candidate) => (
