@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from datetime import UTC, datetime
 
 import pytest
@@ -83,6 +84,32 @@ def test_mcp_failure_does_not_fall_back_silently(monkeypatch: pytest.MonkeyPatch
 
     with pytest.raises(DataHubProviderError, match="MCP metadata request failed"):
         provider.fetch_sample()
+
+
+def test_mcp_generic_failure_logs_exception_server_side_without_changing_public_message(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    token = "token-that-must-not-appear"
+    provider = McpSampleProvider(DataHubSettings(mode="mcp", token=token, mcp_command="/opt/render/uvx"))
+
+    async def broken_fetch() -> McpSampleResult:
+        raise RuntimeError("transport exploded")
+
+    monkeypatch.setattr(provider, "_fetch", broken_fetch)
+
+    caplog.set_level(logging.ERROR, logger="sherlock.connectors.datahub.provider")
+    with pytest.raises(DataHubProviderError) as error:
+        provider.fetch_sample()
+
+    assert str(error.value) == "MCP metadata request failed"
+    assert token not in str(error.value)
+    assert len(caplog.records) == 1
+    record = caplog.records[0]
+    assert record.exc_info is not None
+    assert record.exc_info[0] is RuntimeError
+    assert "mcp_metadata_fetch" in record.getMessage()
+    assert "/opt/render/uvx" in record.getMessage()
+    assert token not in record.getMessage()
 
 
 def test_missing_token_is_explicit_and_does_not_run_mcp() -> None:

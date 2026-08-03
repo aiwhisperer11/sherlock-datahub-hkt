@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import re
 import time
@@ -42,6 +43,8 @@ INVENTORIES_URN = "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_en
 _ALLOWED_MCP_TOOLS = {"get_entities", "list_schema_fields", "get_lineage"}
 _ALLOWED_SAMPLE_MCP_TOOLS = {"search", "get_entities", "get_lineage"}
 _URN_TYPE_RE = re.compile(r"^urn:li:([a-zA-Z]+):")
+
+_logger = logging.getLogger(__name__)
 
 
 class DataHubProviderError(RuntimeError):
@@ -90,15 +93,37 @@ def _require_token(settings: DataHubSettings) -> None:
         raise DataHubProviderError("MCP requires DATAHUB_GMS_TOKEN")
 
 
-def _run_mcp_fetch(fetch_coro: Any, timeout_seconds: float) -> Any:
-    """Run an MCP fetch coroutine, sanitising timeouts and SDK/transport exceptions."""
+def _run_mcp_fetch(fetch_coro: Any, timeout_seconds: float, mcp_command: str) -> Any:
+    """Run an MCP fetch coroutine, sanitising timeouts and SDK/transport exceptions.
+
+    The real exception is logged server-side with its traceback (`exc_info`) so an
+    operator can diagnose it (e.g. a DNS failure on a tunnel hostname); the public
+    `DataHubProviderError` message stays exactly as sanitised as before. Only the
+    exception type, failure phase, configured command, and configured timeout are
+    added as explicit log fields — never the token, headers, env vars, URLs, or
+    DataHub payloads.
+    """
     try:
         return asyncio.run(asyncio.wait_for(fetch_coro, timeout=timeout_seconds))
     except TimeoutError as error:
+        _logger.exception(
+            "MCP metadata fetch timed out (phase=%s, exception_type=%s, mcp_command=%s, timeout_seconds=%s)",
+            "mcp_metadata_fetch",
+            type(error).__name__,
+            mcp_command,
+            timeout_seconds,
+        )
         raise DataHubProviderError("MCP metadata request timed out") from error
     except DataHubProviderError:
         raise
     except Exception as error:  # SDK and transport exceptions are deliberately sanitised.
+        _logger.exception(
+            "MCP metadata fetch failed (phase=%s, exception_type=%s, mcp_command=%s, timeout_seconds=%s)",
+            "mcp_metadata_fetch",
+            type(error).__name__,
+            mcp_command,
+            timeout_seconds,
+        )
         raise DataHubProviderError("MCP metadata request failed") from error
 
 
@@ -193,7 +218,7 @@ class McpMetadataProvider:
 
     def fetch(self) -> DataHubObservation:
         _require_token(self.settings)
-        return _run_mcp_fetch(self._fetch(), self.settings.timeout_seconds)
+        return _run_mcp_fetch(self._fetch(), self.settings.timeout_seconds, self.settings.mcp_command)
 
     async def _fetch(self) -> DataHubObservation:
         from mcp import ClientSession
@@ -241,7 +266,7 @@ class McpSampleProvider:
 
     def fetch_sample(self) -> McpSampleResult:
         _require_token(self.settings)
-        return _run_mcp_fetch(self._fetch(), self.settings.timeout_seconds)
+        return _run_mcp_fetch(self._fetch(), self.settings.timeout_seconds, self.settings.mcp_command)
 
     async def _fetch(self) -> McpSampleResult:
         from mcp import ClientSession

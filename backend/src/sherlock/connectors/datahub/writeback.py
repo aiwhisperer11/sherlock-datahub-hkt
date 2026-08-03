@@ -55,7 +55,7 @@ class _MutationOutcome:
 
 def _fetch_entity_state(settings: DataHubSettings, urn: str) -> _EntityWritebackState:
     """Read-only lookup of the current description and tags for `urn`. Mutations disabled."""
-    return _run_mcp_fetch(_fetch_entity_state_async(settings, urn), settings.timeout_seconds)
+    return _run_mcp_fetch(_fetch_entity_state_async(settings, urn), settings.timeout_seconds, settings.mcp_command)
 
 
 async def _fetch_entity_state_async(settings: DataHubSettings, urn: str) -> _EntityWritebackState:
@@ -139,6 +139,7 @@ class McpWritebackProvider:
         outcome = _run_mcp_fetch(
             self._mutate(summary, add_tag, description_already_present, tag_already_present),
             self.settings.timeout_seconds,
+            self.settings.mcp_command,
         )
 
         after = _fetch_entity_state(self.settings, self.target_urn)

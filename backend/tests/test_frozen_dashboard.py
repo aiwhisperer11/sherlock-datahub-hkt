@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from types import SimpleNamespace
 from urllib.error import URLError
 
@@ -163,6 +164,47 @@ def test_mcp_timeout_is_sanitised(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(DataHubProviderError, match="timed out"):
         provider.fetch()
+
+
+def test_mcp_timeout_logs_exception_server_side_without_changing_public_message(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    token = "token-that-must-not-appear"
+    provider = McpMetadataProvider(DataHubSettings(token=token, timeout_seconds=0.001, mcp_command="/opt/render/uvx"))
+
+    async def never_returns() -> DataHubObservation:
+        await asyncio.sleep(1)
+        return snapshot()
+
+    monkeypatch.setattr(provider, "_fetch", never_returns)
+
+    caplog.set_level(logging.ERROR, logger="sherlock.connectors.datahub.provider")
+    with pytest.raises(DataHubProviderError) as error:
+        provider.fetch()
+
+    assert str(error.value) == "MCP metadata request timed out"
+    assert len(caplog.records) == 1
+    record = caplog.records[0]
+    assert record.exc_info is not None
+    assert "mcp_metadata_fetch" in record.getMessage()
+    assert "/opt/render/uvx" in record.getMessage()
+    assert "0.001" in record.getMessage()
+    assert token not in record.getMessage()
+
+
+def test_successful_mcp_fetch_does_not_log_anything(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    provider = McpMetadataProvider(DataHubSettings(token="not-printed"))
+
+    async def ok_fetch() -> DataHubObservation:
+        return snapshot()
+
+    monkeypatch.setattr(provider, "_fetch", ok_fetch)
+
+    caplog.set_level(logging.ERROR, logger="sherlock.connectors.datahub.provider")
+    result = provider.fetch()
+
+    assert result.urn
+    assert caplog.records == []
 
 
 def test_graphql_error_does_not_leak_token(monkeypatch: pytest.MonkeyPatch) -> None:
