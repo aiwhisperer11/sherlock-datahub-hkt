@@ -327,6 +327,23 @@ class FrozenDashboardResult(BaseModel):
     recommended_action: str
 
 
+class MetadataContextResult(BaseModel):
+    """Live, URN-parametrised metadata context. Separate from FrozenDashboardResult:
+
+    this has no incident narrative, hypotheses, or confidence scoring — it is a direct,
+    honest read of what DataHub/MCP/GraphQL returned for one entity, via the same
+    mode-driven provider selection used by load_frozen_dashboard().
+    """
+
+    entity_urn: str
+    mode: str
+    source: Literal["mcp", "graphql", "snapshot"]
+    live: bool
+    retrieved_at: datetime
+    observation: DataHubObservation
+    provider_attempts: list[ProviderAttempt]
+
+
 class WritebackResult(BaseModel):
     urn: str
     investigation_id: str

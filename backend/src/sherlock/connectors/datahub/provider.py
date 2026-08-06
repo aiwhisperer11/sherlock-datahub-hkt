@@ -30,6 +30,7 @@ from sherlock.domain.models import (
     LineagePage,
     McpSampleEntity,
     McpSampleResult,
+    MetadataContextResult,
     PrimeSuspect,
     ProviderAttempt,
     ObservedDataHubAsset,
@@ -49,6 +50,14 @@ _logger = logging.getLogger(__name__)
 
 class DataHubProviderError(RuntimeError):
     """A provider failed without exposing transport or credential details."""
+
+
+class UnsupportedMetadataUrnError(DataHubProviderError):
+    """Raised when /api/v1/metadata/context is asked for a URN no provider can answer today.
+
+    A distinct type (not a string match on DataHubProviderError) so the API layer can map
+    this to 400 without inspecting error text.
+    """
 
 
 def _extract_mcp_structured_result(result: Any, tool_name: str) -> dict[str, Any]:
@@ -365,6 +374,31 @@ class DataHubMetadataProvider:
                 attempts.append(_attempt(provider_name, "succeeded", started))
                 return _build_frozen_dashboard_result(observed, attempts, provider_name)
         raise DataHubProviderError("No metadata provider returned evidence")
+
+    def load_metadata_context(self, urn: str) -> MetadataContextResult:
+        """Live, URN-parametrised read for GET /api/v1/metadata/context.
+
+        Reuses load_frozen_dashboard()'s existing mode dispatch and fallback (no
+        duplicated provider-selection logic). Only ORDER_DETAILS_URN is supported today,
+        because McpMetadataProvider/GraphQLMetadataProvider are themselves hardcoded to
+        that URN — accepting any other URN here would silently return ORDER_DETAILS data
+        under the requested URN's name, which is not honest. This does not affect
+        load_frozen_dashboard_from_snapshot(), which remains the only path behind
+        GET /api/v1/demo/frozen-dashboard.
+        """
+        if urn != ORDER_DETAILS_URN:
+            raise UnsupportedMetadataUrnError("Only ORDER_DETAILS is supported today")
+        retrieved_at = datetime.now(UTC)
+        result = self.load_frozen_dashboard()
+        return MetadataContextResult(
+            entity_urn=urn,
+            mode=self.settings.mode,
+            source=result.selected_provider,
+            live=result.selected_provider in {"mcp", "graphql"},
+            retrieved_at=retrieved_at,
+            observation=result.observed_from_datahub,
+            provider_attempts=result.provider_attempts,
+        )
 
 
 def _attempt(provider: str, status: Literal["succeeded", "failed", "not_configured"], started: float, error: str | None = None) -> ProviderAttempt:

@@ -2,6 +2,13 @@ import { apiUrl, fetchFrozenDashboard, readErrorDetail, type DataHubObservation 
 
 export type SampleMode = "mcp" | "snapshot";
 
+/** Mirrors ORDER_DETAILS_URN in sherlock/connectors/datahub/provider.py. The live
+ * metadata-context endpoint only supports this URN today — see UnsupportedMetadataUrnError. */
+const ORDER_DETAILS_URN = "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)";
+
+/** The provenance the backend actually used to answer, independent of which UI tab was clicked. */
+export type MetadataSource = "mcp" | "graphql" | "snapshot";
+
 export type SampleEntity = {
   urn: string;
   type: string;
@@ -16,70 +23,37 @@ export type SampleEntity = {
 };
 
 export type SampleView = {
+  /** Which tab/fetcher was requested (UI intent) — not a provenance claim. */
   mode: SampleMode;
-  verified: boolean;
+  /** The backend's real, reported provenance. Never inferred from `mode`: a "mcp" tab request
+   * can legitimately come back with source "graphql" or "snapshot" under auto fallback. */
+  source: MetadataSource;
+  /** True only when source is "mcp" or "graphql". Distinct from any notion of "verified". */
+  live: boolean;
   entityCount: number;
+  /** From observation.captured_at: when the provider normalised this evidence. */
   capturedAt: string | null;
+  /** From the endpoint's top-level retrieved_at: when this HTTP request resolved. Null for the
+   * snapshot path, which is served via the frozen-dashboard endpoint and has no request-time field. */
+  retrievedAt: string | null;
   warnings: string[];
   entity: SampleEntity | null;
 };
 
-type McpSampleApiResponse = {
-  source_mode: "mcp";
-  source_verified: boolean;
-  entity_count: number;
-  entity: {
-    urn: string;
-    type: string;
-    name: string;
-    platform: string;
-    schema_fields: string[];
-    owners: string[];
-    glossary_terms: string[];
-    domains: string[];
-    upstream_urns: string[];
-    downstream_urns: string[];
-  } | null;
-  captured_at?: string | null;
-  warnings: string[];
+type MetadataContextApiResponse = {
+  entity_urn: string;
+  mode: string;
+  source: MetadataSource;
+  live: boolean;
+  retrieved_at: string;
+  observation: DataHubObservation;
+  provider_attempts: { provider: string; status: string; duration_ms: number; error?: string | null }[];
 };
 
 /** Derives an entity type from a DataHub urn (e.g. "urn:li:dataset:(...)" -> "DATASET"). Never fabricates a type. */
 export function entityTypeFromUrn(urn: string): string {
   const match = /^urn:li:([a-zA-Z]+):/.exec(urn);
   return match ? match[1].toUpperCase() : "UNKNOWN";
-}
-
-/** Live read-only MCP sample. Never falls back to snapshot or GraphQL on failure. */
-export async function fetchMcpSample(): Promise<SampleView> {
-  const response = await fetch(`${apiUrl}/api/v1/metadata/mcp/sample`);
-  if (!response.ok) {
-    const detail = await readErrorDetail(response);
-    throw new Error(detail ?? `Engine responded with ${response.status}`);
-  }
-  const body = (await response.json()) as McpSampleApiResponse;
-  return {
-    mode: "mcp",
-    verified: body.source_verified,
-    entityCount: body.entity_count,
-    capturedAt: body.captured_at ?? null,
-    warnings: body.warnings,
-    entity:
-      body.entity_count > 0 && body.entity
-        ? {
-            urn: body.entity.urn,
-            type: body.entity.type,
-            name: body.entity.name,
-            platform: body.entity.platform,
-            schemaFields: body.entity.schema_fields,
-            owners: body.entity.owners,
-            glossaryTerms: body.entity.glossary_terms,
-            domains: body.entity.domains,
-            upstreamUrns: body.entity.upstream_urns,
-            downstreamUrns: body.entity.downstream_urns,
-          }
-        : null,
-  };
 }
 
 function toSampleEntity(observation: DataHubObservation): SampleEntity {
@@ -91,25 +65,52 @@ function toSampleEntity(observation: DataHubObservation): SampleEntity {
     schemaFields: observation.schema_fields.map((field) => field.field_path),
     owners: observation.owners,
     glossaryTerms: observation.glossary_terms,
-    domains: [], // Not present in the snapshot fixture or its DataHubObservation model; not fabricated.
+    domains: [], // Not present in DataHubObservation; not fabricated.
     upstreamUrns: observation.upstream.entities.map((entity) => entity.urn),
     downstreamUrns: observation.downstream.entities.map((entity) => entity.urn),
   };
 }
 
 /**
+ * Live read via GET /api/v1/metadata/context?urn=ORDER_DETAILS_URN. Reports the backend's
+ * actual source and live flag — never assumes "mcp" just because this is the live tab; under
+ * SHERLOCK_METADATA_MODE=auto the backend may honestly answer from graphql or snapshot instead.
+ * No fallback here either: if this fails, the caller switches to Snapshot manually.
+ */
+export async function fetchLiveMetadataContext(): Promise<SampleView> {
+  const response = await fetch(`${apiUrl}/api/v1/metadata/context?urn=${encodeURIComponent(ORDER_DETAILS_URN)}`);
+  if (!response.ok) {
+    const detail = await readErrorDetail(response);
+    throw new Error(detail ?? `Engine responded with ${response.status}`);
+  }
+  const body = (await response.json()) as MetadataContextApiResponse;
+  return {
+    mode: "mcp",
+    source: body.source,
+    live: body.live,
+    entityCount: 1,
+    capturedAt: body.observation.captured_at ?? null,
+    retrievedAt: body.retrieved_at,
+    warnings: body.observation.warning ? [body.observation.warning] : [],
+    entity: toSampleEntity(body.observation),
+  };
+}
+
+/**
  * Public demo mode: reuses the existing `/api/v1/demo/frozen-dashboard` sandbox endpoint
  * instead of a second snapshot endpoint, so the data model is not duplicated. Always
- * reports verified=false since this is fixture data, never live DataHub metadata.
+ * reports source "snapshot" / live=false since this is fixture data, never live DataHub metadata.
  */
 export async function fetchSnapshotSample(): Promise<SampleView> {
   const dashboard = await fetchFrozenDashboard();
   const observation = dashboard.observed_from_datahub;
   return {
     mode: "snapshot",
-    verified: false,
+    source: "snapshot",
+    live: false,
     entityCount: observation ? 1 : 0,
     capturedAt: observation?.captured_at ?? null,
+    retrievedAt: null,
     warnings: observation?.warning ? [observation.warning] : [],
     entity: observation ? toSampleEntity(observation) : null,
   };

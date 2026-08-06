@@ -2,12 +2,12 @@
 
 import React, { useEffect, useState } from "react";
 import { StatusPill } from "@/components/status-pill";
-import { fetchMcpSample, fetchSnapshotSample, type SampleMode, type SampleView } from "@/lib/mcp-sample";
+import { fetchLiveMetadataContext, fetchSnapshotSample, type MetadataSource, type SampleMode, type SampleView } from "@/lib/mcp-sample";
 
 type LoadState = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; data: SampleView };
 
 const FETCHERS: Record<SampleMode, () => Promise<SampleView>> = {
-  mcp: fetchMcpSample,
+  mcp: fetchLiveMetadataContext,
   snapshot: fetchSnapshotSample,
 };
 
@@ -81,7 +81,7 @@ export function McpSampleBody({ data }: { data: SampleView }) {
   if (!data.entity || data.entityCount === 0) {
     return (
       <div className="empty-state-block" aria-label="No entity available">
-        <SourceBadge mode={data.mode} verified={data.verified} />
+        <SourceBadge source={data.source} live={data.live} />
         <p className="muted">No entity was returned by this source.</p>
       </div>
     );
@@ -91,8 +91,9 @@ export function McpSampleBody({ data }: { data: SampleView }) {
   return (
     <div className="mcp-sample-body">
       <div className="mcp-sample-meta">
-        <SourceBadge mode={data.mode} verified={data.verified} />
+        <SourceBadge source={data.source} live={data.live} />
         {data.capturedAt && <span className="captured-at">Captured {new Date(data.capturedAt).toLocaleString()}</span>}
+        {data.retrievedAt && <span className="retrieved-at">Retrieved {new Date(data.retrievedAt).toLocaleString()}</span>}
       </div>
       <div className="mcp-entity-heading">
         <h3>{entity.name}</h3>
@@ -139,9 +140,16 @@ function FieldList({ label, items }: { label: string; items: string[] }) {
   );
 }
 
-function SourceBadge({ mode, verified }: { mode: SampleMode; verified: boolean }) {
-  if (mode === "mcp") {
-    return <span className={`source-badge mcp ${verified ? "verified" : "unverified"}`}>MCP · {verified ? "live, verified" : "not verified"}</span>;
+const SOURCE_LABEL: Record<MetadataSource, string> = { mcp: "MCP", graphql: "GraphQL", snapshot: "Snapshot" };
+
+/**
+ * Renders the backend's actual reported source — never the active tab. Under
+ * SHERLOCK_METADATA_MODE=auto, clicking "MCP (live)" can honestly come back as graphql or
+ * snapshot; this badge must say so instead of always claiming "MCP".
+ */
+function SourceBadge({ source, live }: { source: MetadataSource; live: boolean }) {
+  if (live) {
+    return <span className={`source-badge ${source} live`}>{SOURCE_LABEL[source]} · Live</span>;
   }
-  return <span className="source-badge snapshot">Snapshot · demo data, not live</span>;
+  return <span className="source-badge snapshot">Snapshot · Reproducible</span>;
 }

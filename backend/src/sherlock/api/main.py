@@ -4,10 +4,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from sherlock.connectors.datahub import DataHubMetadataProvider, DataHubProviderError, McpSampleProvider
+from sherlock.connectors.datahub import DataHubMetadataProvider, DataHubProviderError, McpSampleProvider, UnsupportedMetadataUrnError
 from sherlock.connectors.datahub.writeback import McpWritebackProvider
 from sherlock.connectors.sandbox import SandboxMetadataProvider
-from sherlock.domain.models import FrozenDashboardResult, Investigation, McpSampleResult, WritebackResult
+from sherlock.domain.models import FrozenDashboardResult, Investigation, McpSampleResult, MetadataContextResult, WritebackResult
 
 app = FastAPI(title="Sherlock Engine", version="0.1.0")
 
@@ -47,6 +47,16 @@ def frozen_dashboard_demo() -> FrozenDashboardResult:
 def mcp_sample() -> McpSampleResult:
     try:
         return McpSampleProvider().fetch_sample()
+    except DataHubProviderError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+
+
+@app.get("/api/v1/metadata/context", response_model=MetadataContextResult)
+def metadata_context(urn: str) -> MetadataContextResult:
+    try:
+        return DataHubMetadataProvider().load_metadata_context(urn)
+    except UnsupportedMetadataUrnError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     except DataHubProviderError as error:
         raise HTTPException(status_code=502, detail=str(error)) from error
 
