@@ -132,6 +132,26 @@ demo's Frozen Dashboard endpoint is always snapshot-backed for this reason.
 The MCP tab in the UI is an optional, separately-verified capability, not the
 source of the incident scenario.
 
+### Live metadata-context endpoint validation
+
+`GET /api/v1/metadata/context?urn=ORDER_DETAILS_URN` was validated live
+against the deployed Render backend, connected to a local DataHub Quickstart
+instance through a temporary Cloudflare quick tunnel pointed at local GMS.
+Result: `source=mcp`, `live=true`, 55 schema fields, PII-tagged glossary
+terms, 12 upstream / 14 downstream lineage entities returned.
+
+The tunnel was intentionally closed immediately after capturing this
+evidence, and is not part of the public demo's standing infrastructure. The
+local DataHub instance behind it runs with
+`METADATA_SERVICE_AUTH_ENABLED=false` — leaving that tunnel open would
+expose an unauthenticated DataHub instance to the public internet for as
+long as it stayed up, which is a real security/availability risk, not a
+hypothetical one. As a result, `SHERLOCK_METADATA_MODE=mcp` on the deployed
+backend will fail (no reachable `DATAHUB_GMS_URL`) until a new tunnel is
+opened for a future verification window. The "MCP (live)" panel correctly
+reports this as unavailable rather than silently falling back to the
+snapshot.
+
 ## Required Environment Variables
 
 Backend:
