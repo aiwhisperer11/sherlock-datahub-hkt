@@ -162,7 +162,7 @@ class DataHubSettings:
     mode: str = "sandbox"
     gms_url: str = "http://localhost:8080"
     token: str | None = None
-    mcp_command: str = "/home/work/.local/bin/uvx"
+    mcp_command: str = "uvx"
     mcp_package: str = "mcp-server-datahub@latest"
     timeout_seconds: float = 15.0
 
@@ -172,7 +172,7 @@ class DataHubSettings:
             mode=os.getenv("SHERLOCK_METADATA_MODE", "sandbox").lower(),
             gms_url=os.getenv("DATAHUB_GMS_URL", "http://localhost:8080").rstrip("/"),
             token=os.getenv("DATAHUB_GMS_TOKEN") or None,
-            mcp_command=os.getenv("SHERLOCK_DATAHUB_MCP_COMMAND", "/home/work/.local/bin/uvx"),
+            mcp_command=os.getenv("SHERLOCK_DATAHUB_MCP_COMMAND", "uvx"),
             mcp_package=os.getenv("SHERLOCK_DATAHUB_MCP_PACKAGE", "mcp-server-datahub@latest"),
             timeout_seconds=float(os.getenv("SHERLOCK_DATAHUB_TIMEOUT_SECONDS", "15")),
         )
