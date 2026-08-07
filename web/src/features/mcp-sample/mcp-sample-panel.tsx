@@ -11,9 +11,9 @@ const FETCHERS: Record<SampleMode, () => Promise<SampleView>> = {
   snapshot: fetchSnapshotSample,
 };
 
-const MODE_LABEL: Record<SampleMode, string> = { mcp: "MCP (live)", snapshot: "Snapshot (demo)" };
-const SAMPLE_LABEL: Record<SampleMode, string> = { mcp: "Live metadata sample", snapshot: "Demo metadata sample" };
-const SAMPLE_TITLE: Record<SampleMode, string> = { mcp: "One real DataHub entity via MCP", snapshot: "One demo DataHub entity from the snapshot" };
+const MODE_LABEL: Record<SampleMode, string> = { mcp: "MCP (live)", snapshot: "Snapshot (frozen)" };
+const SAMPLE_LABEL: Record<SampleMode, string> = { mcp: "Live metadata sample", snapshot: "Frozen metadata sample" };
+const SAMPLE_TITLE: Record<SampleMode, string> = { mcp: "One real DataHub entity via MCP", snapshot: "One entity from a frozen, labelled snapshot — not live" };
 
 export function loadingLabel(mode: SampleMode): string {
   return `Fetching ${mode === "mcp" ? "live MCP" : "snapshot"} metadata…`;
@@ -151,5 +151,5 @@ function SourceBadge({ source, live }: { source: MetadataSource; live: boolean }
   if (live) {
     return <span className={`source-badge ${source} live`}>{SOURCE_LABEL[source]} · Live</span>;
   }
-  return <span className="source-badge snapshot">Snapshot · Reproducible</span>;
+  return <span className="source-badge snapshot">Snapshot · Frozen (not live)</span>;
 }

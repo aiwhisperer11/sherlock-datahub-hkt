@@ -43,6 +43,10 @@ ORDER_DETAILS_URN = "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_
 INVENTORIES_URN = "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.inventories,PROD)"
 _ALLOWED_MCP_TOOLS = {"get_entities", "list_schema_fields", "get_lineage"}
 _ALLOWED_SAMPLE_MCP_TOOLS = {"search", "get_entities", "get_lineage"}
+# Separate from the general read allowlists above: Document tools are a distinct
+# entity type (search_documents is read-only; save_document is a mutation), and
+# must never be reachable through _ALLOWED_MCP_TOOLS/_ALLOWED_SAMPLE_MCP_TOOLS.
+_ALLOWED_DOCUMENT_MCP_TOOLS = {"search_documents", "save_document"}
 _URN_TYPE_RE = re.compile(r"^urn:li:([a-zA-Z]+):")
 
 _logger = logging.getLogger(__name__)
@@ -136,7 +140,17 @@ def _run_mcp_fetch(fetch_coro: Any, timeout_seconds: float, mcp_command: str) ->
         raise DataHubProviderError("MCP metadata request failed") from error
 
 
-def _build_stdio_parameters(settings: DataHubSettings) -> Any:
+def _build_stdio_parameters(settings: DataHubSettings, mutation_enabled: bool = False) -> Any:
+    """Build MCP subprocess parameters.
+
+    `settings.token` is `None` whenever `DATAHUB_GMS_TOKEN` is unset — a real,
+    supported configuration against a local instance with
+    `METADATA_SERVICE_AUTH_ENABLED=false`, not an error case. `StdioServerParameters.env`
+    requires `dict[str, str]`, so `None` must become `""` here rather than being
+    passed through: DataHub itself is the authority on whether a token was
+    required, via a real (sanitised) auth error if it was. No placeholder token
+    is ever substituted — an empty string is not a credential.
+    """
     from mcp import StdioServerParameters
 
     return StdioServerParameters(
@@ -144,8 +158,8 @@ def _build_stdio_parameters(settings: DataHubSettings) -> Any:
         args=[settings.mcp_package],
         env={
             "DATAHUB_GMS_URL": settings.gms_url,
-            "DATAHUB_GMS_TOKEN": settings.token,
-            "TOOLS_IS_MUTATION_ENABLED": "false",
+            "DATAHUB_GMS_TOKEN": settings.token or "",
+            "TOOLS_IS_MUTATION_ENABLED": "true" if mutation_enabled else "false",
         },
     )
 
@@ -164,7 +178,13 @@ class DataHubSettings:
     token: str | None = None
     mcp_command: str = "uvx"
     mcp_package: str = "mcp-server-datahub@latest"
-    timeout_seconds: float = 15.0
+    # 30s, not 15s: DocumentWritebackProvider.preview() runs two MCP tool calls
+    # (get_entities + get_lineage) inside one session/timeout budget. Measured
+    # against a local Quickstart instance under load, that round trip alone
+    # took 14-17s — right at the old 15s edge, causing intermittent timeouts
+    # that were not a code defect. Still overridable via
+    # SHERLOCK_DATAHUB_TIMEOUT_SECONDS; this raises the default, not a retry.
+    timeout_seconds: float = 30.0
 
     @classmethod
     def from_environment(cls) -> DataHubSettings:
@@ -174,7 +194,7 @@ class DataHubSettings:
             token=os.getenv("DATAHUB_GMS_TOKEN") or None,
             mcp_command=os.getenv("SHERLOCK_DATAHUB_MCP_COMMAND", "uvx"),
             mcp_package=os.getenv("SHERLOCK_DATAHUB_MCP_PACKAGE", "mcp-server-datahub@latest"),
-            timeout_seconds=float(os.getenv("SHERLOCK_DATAHUB_TIMEOUT_SECONDS", "15")),
+            timeout_seconds=float(os.getenv("SHERLOCK_DATAHUB_TIMEOUT_SECONDS", "30")),
         )
 
     @classmethod

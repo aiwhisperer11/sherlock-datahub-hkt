@@ -85,6 +85,32 @@
                 "type": "integer",
                 "minimum": 1,
                 "description": "Iteration in which this evidence entered the case. Enables the client to highlight new evidence."
+              },
+              "source": {
+                "type": "object",
+                "description": "Optional machine provenance for evidence acquired from an external governed system (e.g. DataHub over MCP). Absent for user-provided or legacy evidence; its absence must not affect validation of existing investigations.",
+                "additionalProperties": false,
+                "required": ["type", "tool", "entity_urn", "retrieved_at"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "datahub_mcp",
+                    "description": "Fixed discriminator; the only external evidence source this schema version knows about."
+                  },
+                  "tool": {
+                    "type": "string",
+                    "description": "The MCP tool that produced this fact, e.g. 'get_entities' or 'get_lineage'."
+                  },
+                  "entity_urn": {
+                    "type": "string",
+                    "description": "The DataHub URN this fact was observed on."
+                  },
+                  "retrieved_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "When this fact was read from DataHub. Not a data-freshness signal about the asset itself."
+                  }
+                }
               }
             }
           }

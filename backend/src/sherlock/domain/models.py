@@ -353,3 +353,88 @@ class WritebackResult(BaseModel):
     already_published: bool
     degraded: bool
     detail: str
+
+
+class DataHubEvidence(BaseModel):
+    """One fact read live from DataHub via a single MCP tool call.
+
+    Deliberately separate from InvestigationEvidence (which serves the elaborate
+    Frozen Dashboard investigation): this is the minimal evidence unit for the
+    discover -> evidence -> reasoning -> document flow, traceable to exactly one
+    MCP tool and one URN.
+    """
+
+    id: str
+    tool: str
+    urn: str
+    observed_fact: str
+    observed_at: datetime
+    provenance: Literal["observed_from_datahub"] = "observed_from_datahub"
+
+
+class ReasoningConsequence(BaseModel):
+    """An observable consequence of Sherlock reasoning over DataHubEvidence.
+
+    `evidence_ids` and `next_test` must be traceable to real evidence — this is
+    the artifact a test can check to prove DataHub context actually affected
+    what Sherlock concluded, not just that a read happened.
+    """
+
+    id: str
+    statement: str
+    evidence_ids: list[str]
+    next_test: str
+
+
+class DocumentPreview(BaseModel):
+    """What would be written to DataHub if a human approves it.
+
+    Building this never calls save_document — preview and publish are separate
+    MCP sessions, and only publish (with explicit approval) can mutate.
+
+    `evidence` and `reasoning_consequence` are carried as full structured
+    objects (not just ids) so a UI can render each DataHub fact — tool, URN,
+    observed fact, timestamp, provenance — and the reasoning consequence's
+    statement/next_test distinctly, not only as text embedded in `content`.
+    `content` remains the exact text that would be published, so a reviewer
+    also sees literally what save_document would write.
+    """
+
+    idempotency_key: str
+    document_type: str
+    title: str
+    content: str
+    related_assets: list[str]
+    reasoning_consequence: ReasoningConsequence
+    evidence: list[DataHubEvidence]
+    persistence_warning: str = (
+        "This document is permanent once published: mcp-server-datahub exposes "
+        "no document-delete tool, so Sherlock cannot remove or edit it afterward."
+    )
+    engine_source: Literal["sherlock_core_canonical", "local_fallback"] = "local_fallback"
+    """Which source produced `reasoning_consequence`/`content`:
+
+    - "sherlock_core_canonical": the canonical Sherlock-Core investigation
+      engine ran on this DataHub evidence and its snapshot cited it.
+    - "local_fallback": Sherlock-Core was not configured, unreachable, or its
+      response did not cite any DataHub evidence — derive_reasoning_consequence()
+      produced this instead. Always disclosed, never silently presented as the
+      canonical engine's conclusion.
+    """
+
+
+class DocumentWritebackResult(BaseModel):
+    status: Literal["created", "already_exists"]
+    urn: str
+    idempotency_key: str
+    document_type: str
+    title: str
+    detail: str
+
+
+class DocumentRetrievalResult(BaseModel):
+    status: Literal["verified", "not_found", "mismatch"]
+    urn: str | None
+    title: str | None
+    idempotency_key: str
+    detail: str

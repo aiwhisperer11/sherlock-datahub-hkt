@@ -9,13 +9,32 @@ from sherlock.connectors.datahub.provider import (
     DataHubMetadataProvider,
     DataHubProviderError,
     DataHubSettings,
+    _ALLOWED_DOCUMENT_MCP_TOOLS,
     _ALLOWED_MCP_TOOLS,
     _build_stdio_parameters,
     _call_mcp_tool,
     _require_token,
     _run_mcp_fetch,
 )
-from sherlock.domain.models import FrozenDashboardResult, WritebackResult
+from sherlock.domain.models import (
+    DocumentPreview,
+    DocumentRetrievalResult,
+    DocumentWritebackResult,
+    FrozenDashboardResult,
+    WritebackResult,
+)
+from sherlock.integrations.sherlock_core.boundary import CanonicalInvestigationError, validate_unchanged
+from sherlock.integrations.sherlock_core.client import SherlockCoreClient, SherlockCoreUnavailableError
+from sherlock.investigations.datahub_document_flow import (
+    build_baseline_request,
+    build_document_preview,
+    build_document_preview_from_engine_snapshot,
+    derive_reasoning_consequence,
+    deterministic_idempotency_key,
+    evidence_from_entity,
+    evidence_from_lineage,
+    to_canonical_evidence,
+)
 
 _ALLOWED_WRITEBACK_MCP_TOOLS = {"update_description", "add_tags"}
 _WRITEBACK_TAG_URN = "urn:li:tag:sherlock-investigated"
@@ -90,7 +109,11 @@ def _build_writeback_stdio_parameters(settings: DataHubSettings) -> Any:
         args=[settings.mcp_package],
         env={
             "DATAHUB_GMS_URL": settings.gms_url,
-            "DATAHUB_GMS_TOKEN": settings.token,
+            # settings.token is None when DATAHUB_GMS_TOKEN is unset — a real,
+            # supported configuration against an instance with
+            # METADATA_SERVICE_AUTH_ENABLED=false, not an error. No placeholder
+            # token is substituted; DataHub itself enforces auth if required.
+            "DATAHUB_GMS_TOKEN": settings.token or "",
             "TOOLS_IS_MUTATION_ENABLED": "true",
         },
     )
@@ -243,3 +266,184 @@ class McpWritebackProvider:
 
     async def _call(self, session: Any, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         return await _call_mcp_tool(session, tool_name, arguments, _ALLOWED_WRITEBACK_MCP_TOOLS)
+
+
+class DocumentWritebackProvider:
+    """discover -> evidence -> reasoning -> preview -> (human approval) -> save_document -> retrieve.
+
+    Three separate concerns, never mixed in one method:
+      - preview() only reads (get_entities, general read allowlist) and derives
+        evidence/reasoning/content through pure functions. It never calls
+        save_document and therefore never mutates DataHub.
+      - publish() is the only method that can call save_document, restricted to
+        `_ALLOWED_DOCUMENT_MCP_TOOLS`, and only runs the mutation when the
+        caller passes `approved=True` explicitly — there is no default that
+        publishes an investigation automatically. It first checks
+        `preview.idempotency_key` via the read-only `search_documents`, so a
+        retried call finds the existing document instead of creating a
+        duplicate (mcp-server-datahub has no document-delete tool: duplicates
+        would be permanent).
+      - retrieve() independently re-reads by idempotency key and confirms the
+        URN, title, and idempotency marker actually match.
+    """
+
+    def __init__(self, settings: DataHubSettings | None = None, engine_client: SherlockCoreClient | None = None) -> None:
+        self.settings = settings or DataHubSettings.from_environment()
+        self.engine_client = engine_client or SherlockCoreClient.from_environment()
+
+    def preview(self, urn: str) -> DocumentPreview:
+        """discover -> evidence -> [canonical Sherlock-Core engine] -> preview.
+
+        The canonical engine is the primary path: DataHub evidence is
+        converted to canonical SherlockEvidence (with `source` provenance)
+        and submitted to Sherlock-Core's real investigation engine. Only when
+        the engine is not configured (`SHERLOCK_CORE_URL` unset), unreachable,
+        or its snapshot does not actually cite any DataHub evidence, this
+        falls back to derive_reasoning_consequence() — always disclosed via
+        `DocumentPreview.engine_source`, never presented as the canonical
+        engine's conclusion.
+        """
+        entity, upstream = _run_mcp_fetch(self._fetch_context(urn), self.settings.timeout_seconds, self.settings.mcp_command)
+        observed_at = datetime.now(UTC)
+        evidence = evidence_from_entity("get_entities", urn, entity, observed_at) + evidence_from_lineage("get_lineage", urn, upstream, observed_at)
+
+        canonical_evidence = to_canonical_evidence(evidence)
+        engine_preview = self._try_canonical_engine(urn, evidence, canonical_evidence)
+        if engine_preview is not None:
+            return engine_preview
+
+        consequence = derive_reasoning_consequence(urn, evidence)
+        idempotency_key = deterministic_idempotency_key(urn, consequence.id)
+        fallback = build_document_preview(urn, evidence, consequence, idempotency_key)
+        disclosure = (
+            "[Sherlock-Core canonical engine unavailable for this preview; the "
+            "reasoning below is a local fallback, not the canonical engine's "
+            "conclusion.]\n\n"
+        )
+        return fallback.model_copy(update={"content": disclosure + fallback.content, "engine_source": "local_fallback"})
+
+    def _try_canonical_engine(
+        self, urn: str, evidence: list[Any], canonical_evidence: list[Any]
+    ) -> DocumentPreview | None:
+        if not self.engine_client.configured:
+            return None
+        baseline = build_baseline_request(urn, canonical_evidence)
+        try:
+            raw_snapshot = self.engine_client.run_baseline_investigation(baseline)
+            snapshot = validate_unchanged(raw_snapshot)
+        except (SherlockCoreUnavailableError, CanonicalInvestigationError):
+            return None
+        idempotency_key = deterministic_idempotency_key(urn, str(snapshot.get("meta", {}).get("case_id", urn)))
+        return build_document_preview_from_engine_snapshot(urn, evidence, canonical_evidence, snapshot, idempotency_key)
+
+    async def _fetch_context(self, urn: str) -> tuple[dict[str, Any], dict[str, Any]]:
+        """One read-only session, two calls: get_entities (name/owners/glossary) and
+        get_lineage upstream (incident-relevant dependency signal). Kept in one
+        session so preview() opens exactly one MCP subprocess, not two."""
+        from mcp import ClientSession
+        from mcp.client.stdio import stdio_client
+
+        parameters = _build_stdio_parameters(self.settings, mutation_enabled=False)
+        async with stdio_client(parameters) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                entity_result = await _call_mcp_tool(session, "get_entities", {"urns": [urn]}, _ALLOWED_MCP_TOOLS)
+                upstream_result = await _call_mcp_tool(
+                    session,
+                    "get_lineage",
+                    {"urn": urn, "column": None, "query": "*", "upstream": True, "max_hops": 1, "max_results": 20, "offset": 0},
+                    _ALLOWED_MCP_TOOLS,
+                )
+        entity_list = entity_result.get("result", entity_result.get("entities", entity_result.get("results", [])))
+        if not isinstance(entity_list, list) or not entity_list or not isinstance(entity_list[0], dict):
+            raise DataHubProviderError("Preview target entity was not found")
+        return entity_list[0], upstream_result
+
+    def publish(self, preview: DocumentPreview, approved: bool) -> DocumentWritebackResult:
+        if not approved:
+            raise DataHubProviderError("Publishing a Sherlock investigation document requires explicit human approval")
+
+        existing = _run_mcp_fetch(self._find_by_key(preview.idempotency_key), self.settings.timeout_seconds, self.settings.mcp_command)
+        if existing is not None:
+            return DocumentWritebackResult(
+                status="already_exists",
+                urn=str(existing.get("urn")),
+                idempotency_key=preview.idempotency_key,
+                document_type=preview.document_type,
+                title=preview.title,
+                detail="A document with this idempotency key is already published; no mutation performed.",
+            )
+
+        saved = _run_mcp_fetch(self._save(preview), self.settings.timeout_seconds, self.settings.mcp_command)
+        urn = saved.get("urn")
+        if not saved.get("success") or not urn:
+            raise DataHubProviderError("save_document did not report success")
+        return DocumentWritebackResult(
+            status="created",
+            urn=str(urn),
+            idempotency_key=preview.idempotency_key,
+            document_type=preview.document_type,
+            title=preview.title,
+            detail=str(saved.get("message") or "Document created."),
+        )
+
+    async def _save(self, preview: DocumentPreview) -> dict[str, Any]:
+        from mcp import ClientSession
+        from mcp.client.stdio import stdio_client
+
+        parameters = _build_stdio_parameters(self.settings, mutation_enabled=True)
+        async with stdio_client(parameters) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                return await _call_mcp_tool(
+                    session,
+                    "save_document",
+                    {
+                        "document_type": preview.document_type,
+                        "title": preview.title,
+                        "content": preview.content,
+                        "related_assets": preview.related_assets,
+                    },
+                    _ALLOWED_DOCUMENT_MCP_TOOLS,
+                )
+
+    async def _find_by_key(self, idempotency_key: str) -> dict[str, Any] | None:
+        from mcp import ClientSession
+        from mcp.client.stdio import stdio_client
+
+        parameters = _build_stdio_parameters(self.settings, mutation_enabled=False)
+        async with stdio_client(parameters) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                result = await _call_mcp_tool(session, "search_documents", {"query": idempotency_key}, _ALLOWED_DOCUMENT_MCP_TOOLS)
+        for hit in result.get("searchResults", []):
+            entity = hit.get("entity") if isinstance(hit, dict) else None
+            if not isinstance(entity, dict):
+                continue
+            title = entity.get("info", {}).get("title", "")
+            if idempotency_key in title:
+                return entity
+        return None
+
+    def retrieve(self, idempotency_key: str, expected_urn: str | None = None) -> DocumentRetrievalResult:
+        """Independently re-read by idempotency key and confirm URN/title/marker."""
+        entity = _run_mcp_fetch(self._find_by_key(idempotency_key), self.settings.timeout_seconds, self.settings.mcp_command)
+        if entity is None:
+            return DocumentRetrievalResult(
+                status="not_found", urn=None, title=None, idempotency_key=idempotency_key, detail="search_documents found no document with this idempotency key."
+            )
+        urn = entity.get("urn")
+        title = entity.get("info", {}).get("title")
+        marker_present = isinstance(title, str) and idempotency_key in title
+        urn_matches = expected_urn is None or urn == expected_urn
+        if marker_present and urn_matches and urn:
+            return DocumentRetrievalResult(
+                status="verified", urn=str(urn), title=title, idempotency_key=idempotency_key, detail="URN, title, and idempotency marker all matched."
+            )
+        return DocumentRetrievalResult(
+            status="mismatch",
+            urn=str(urn) if urn else None,
+            title=title,
+            idempotency_key=idempotency_key,
+            detail="Document found but URN or title did not match what was expected.",
+        )

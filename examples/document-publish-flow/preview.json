@@ -1,0 +1,59 @@
+{
+  "preview": {
+    "idempotency_key": "sherlock-investigation-449ae577a77e4d1a",
+    "document_type": "Insight",
+    "title": "Sherlock investigation: urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD) (sherlock-investigation-449ae577a77e4d1a)",
+    "content": "# Sherlock investigation (canonical engine) for urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)\n\nCase: DataHub context for ORDER_DETAILS\nHypothesis H3 (active): The supplied DataHub context is insufficient to prioritize a specific operational or governance concern; schema fields, detailed lineage-edge metadata, and a concrete incident or control signal are required before the metadata can support a causal investigation.\n\nDataHub evidence submitted to this investigation:\n- E1 [get_entities] Entity name is ORDER_DETAILS. (urn=urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD), observed_at=2026-08-07T17:55:10.857936+00:00) \u2014 cited by the investigation\n- E2 [get_entities] Owners on record: DataHub SE Team, David Kim, Julia Novak. (urn=urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD), observed_at=2026-08-07T17:55:10.857936+00:00) \u2014 cited by the investigation\n- E3 [get_entities] Glossary terms attached: PII, SOC2 Auditable, Order Total, Revenue by Customer Class. (urn=urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD), observed_at=2026-08-07T17:55:10.857936+00:00) \u2014 cited by the investigation\n- E4 [get_lineage] 12 upstream dependency(ies) at one hop: order_details, ADDRESSES, COUNTRIES, CUSTOMERS, INVENTORIES, ORDER_ITEMS, ORDERS, PRODUCT_CATEGORIES, PRODUCTS, PROMOTIONS, REGIONS, WAREHOUSES. (urn=urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD), observed_at=2026-08-07T17:55:10.857936+00:00) \u2014 cited by the investigation\n\nNext test: Retrieve the complete DataHub entity aspects for ORDER_DETAILS in one targeted query: field-level schema/classifications and detailed one-hop lineage-edge metadata, then check whether any returned field or edge has a recorded governance exception or operational status signal.\n\nLimitations:\n- The case remains open because X4 leaves every upstream dependency as an untested operational candidate and X5 leaves the PII and SOC2 Auditable terms untested against field-level controls. M1 through M4 are discriminating evidence gaps rather than evidence of failures. No supplied item establishes a concrete incident or causal connection.\n\nIdempotency marker: sherlock-investigation-449ae577a77e4d1a",
+    "related_assets": [
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
+    ],
+    "reasoning_consequence": {
+      "id": "engine-H3-urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+      "statement": "The supplied DataHub context is insufficient to prioritize a specific operational or governance concern; schema fields, detailed lineage-edge metadata, and a concrete incident or control signal are required before the metadata can support a causal investigation.",
+      "evidence_ids": [
+        "E1",
+        "E2",
+        "E3",
+        "E4"
+      ],
+      "next_test": "Retrieve the complete DataHub entity aspects for ORDER_DETAILS in one targeted query: field-level schema/classifications and detailed one-hop lineage-edge metadata, then check whether any returned field or edge has a recorded governance exception or operational status signal."
+    },
+    "evidence": [
+      {
+        "id": "ev-name-urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "tool": "get_entities",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "observed_fact": "Entity name is ORDER_DETAILS.",
+        "observed_at": "2026-08-07T17:55:10.857936Z",
+        "provenance": "observed_from_datahub"
+      },
+      {
+        "id": "ev-owners-urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "tool": "get_entities",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "observed_fact": "Owners on record: DataHub SE Team, David Kim, Julia Novak.",
+        "observed_at": "2026-08-07T17:55:10.857936Z",
+        "provenance": "observed_from_datahub"
+      },
+      {
+        "id": "ev-terms-urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "tool": "get_entities",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "observed_fact": "Glossary terms attached: PII, SOC2 Auditable, Order Total, Revenue by Customer Class.",
+        "observed_at": "2026-08-07T17:55:10.857936Z",
+        "provenance": "observed_from_datahub"
+      },
+      {
+        "id": "ev-upstream-urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "tool": "get_lineage",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "observed_fact": "12 upstream dependency(ies) at one hop: order_details, ADDRESSES, COUNTRIES, CUSTOMERS, INVENTORIES, ORDER_ITEMS, ORDERS, PRODUCT_CATEGORIES, PRODUCTS, PROMOTIONS, REGIONS, WAREHOUSES.",
+        "observed_at": "2026-08-07T17:55:10.857936Z",
+        "provenance": "observed_from_datahub"
+      }
+    ],
+    "persistence_warning": "This document is permanent once published: mcp-server-datahub exposes no document-delete tool, so Sherlock cannot remove or edit it afterward.",
+    "engine_source": "sherlock_core_canonical"
+  },
+  "preview_hash": "f37374d3dc53428f800ccc045a1248e741f2767a9bda97fa606c923696c8e2ba"
+}

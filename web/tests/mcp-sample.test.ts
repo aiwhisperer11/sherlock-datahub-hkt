@@ -61,7 +61,7 @@ describe("MCP sample metadata", () => {
 
     const html = renderToStaticMarkup(createElement(McpSampleBody, { data: snapshotData }));
 
-    expect(html).toContain("Snapshot · Reproducible");
+    expect(html).toContain("Snapshot · Frozen (not live)");
     expect(html).not.toContain("MCP · Live");
     expect(html).not.toContain("GraphQL · Live");
   });

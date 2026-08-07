@@ -163,3 +163,64 @@ def test_invalid_sherlock_response_is_rejected_without_remapping() -> None:
         validate_unchanged({"schema_version": "wrong"})
     with pytest.raises(ValueError, match="schema_version"):
         DataHubInvestigationResponse(investigation={"schema_version": "wrong"}, evidence_provenance=provenance, provider_attempts=[])
+
+
+def test_legacy_evidence_without_source_still_validates() -> None:
+    """Requirement: evidence without the new `source` field (every item in this
+    real, previously-captured fixture) must keep validating unchanged."""
+    valid = json.loads((Path(__file__).parent / "fixtures" / "sherlock-investigation-1.0.0.json").read_text())
+    assert all("source" not in item for item in valid["case"]["evidence"])
+
+    validated = validate_unchanged(valid)
+
+    assert validated == valid
+
+
+def test_evidence_with_datahub_mcp_source_validates() -> None:
+    """Requirement: the canonical schema accepts evidence carrying the new
+    optional `source` provenance object."""
+    valid = json.loads((Path(__file__).parent / "fixtures" / "sherlock-investigation-1.0.0.json").read_text())
+    with_source = json.loads(json.dumps(valid))
+    with_source["case"]["evidence"][0]["source"] = {
+        "type": "datahub_mcp",
+        "tool": "get_lineage",
+        "entity_urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "retrieved_at": "2026-08-07T12:00:00Z",
+    }
+
+    validated = validate_unchanged(with_source)
+
+    assert validated["case"]["evidence"][0]["source"]["type"] == "datahub_mcp"
+
+
+def test_evidence_source_rejects_unknown_properties() -> None:
+    """additionalProperties: false on the new source object — a typo'd or
+    invented field must be rejected, not silently accepted."""
+    valid = json.loads((Path(__file__).parent / "fixtures" / "sherlock-investigation-1.0.0.json").read_text())
+    tampered = json.loads(json.dumps(valid))
+    tampered["case"]["evidence"][0]["source"] = {
+        "type": "datahub_mcp",
+        "tool": "get_lineage",
+        "entity_urn": "urn:...",
+        "retrieved_at": "2026-08-07T12:00:00Z",
+        "unexpected_field": "should be rejected",
+    }
+
+    with pytest.raises(CanonicalInvestigationError):
+        validate_unchanged(tampered)
+
+
+def test_sherlock_evidence_contract_accepts_optional_source() -> None:
+    from sherlock.integrations.sherlock_core.contracts import EvidenceMcpSource, SherlockEvidence
+
+    without_source = SherlockEvidence(id="E1", label="l", content="c")
+    assert without_source.source is None
+
+    with_source = SherlockEvidence(
+        id="E2",
+        label="l",
+        content="c",
+        source=EvidenceMcpSource(tool="get_lineage", entity_urn="urn:li:dataset:(x,y,PROD)", retrieved_at=datetime(2026, 8, 7, 12, 0, tzinfo=UTC)),
+    )
+    assert with_source.source is not None
+    assert with_source.source.type == "datahub_mcp"

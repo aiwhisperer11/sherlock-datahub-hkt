@@ -39,10 +39,25 @@ class DataHubInvestigationRequest(_StrictModel):
         return value
 
 
+class EvidenceMcpSource(_StrictModel):
+    """Optional machine provenance for evidence acquired over DataHub MCP.
+
+    Mirrors the `source` object added to the canonical schema's evidence
+    item (`schemas/sherlock-investigation-1.0.0.schema.json`). Absent for
+    user-provided or legacy evidence — this must never be required.
+    """
+
+    type: Literal["datahub_mcp"] = "datahub_mcp"
+    tool: str = Field(min_length=1, max_length=128)
+    entity_urn: str = Field(min_length=1, max_length=2048)
+    retrieved_at: datetime
+
+
 class SherlockEvidence(_StrictModel):
     id: str = Field(pattern=r"^E[1-9][0-9]*$")
     label: str = Field(min_length=1, max_length=256)
     content: str = Field(min_length=1, max_length=10_000)
+    source: EvidenceMcpSource | None = None
 
 
 class DataHubEvidenceSourceReference(_StrictModel):

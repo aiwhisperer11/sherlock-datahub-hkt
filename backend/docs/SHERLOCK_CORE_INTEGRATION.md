@@ -18,4 +18,12 @@ the packaged Draft 2020-12 canonical schema, plus the required version
 `d1c9f80ae6df0826a8399c6779b5cdc17e63b0be`; vendored SHA-256:
 `3cad1ea054e1288f406a2463ce3b04819f863684ff78550f8676600df7cc0a1f`.
 Structural validation does not establish that metadata is causally true.
-Remote transport or embedded Sherlock-Core has not been added in this gate.
+
+**Update:** remote transport now exists — `sherlock.integrations.sherlock_core.client.SherlockCoreClient`
+(`client.py`), configured via `SHERLOCK_CORE_URL`, POSTs to a real deployed
+Sherlock-Core instance's `/api/investigate`. This is used by the Document
+Publish Flow (`DocumentWritebackProvider.preview()` in
+`connectors/datahub/writeback.py`), not by the older `FrozenDashboardResult`
+path described above, which is intentionally left untouched. See
+`PUBLISH_APPROVAL_FLOW.md` for the wired contract and real evidence of a
+canonical, DataHub-evidence-citing response from the deployed engine.

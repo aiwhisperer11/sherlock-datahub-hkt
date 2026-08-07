@@ -1,0 +1,8 @@
+{
+  "status": "created",
+  "urn": "urn:li:document:shared-30cbf664-8859-4406-982d-a930fcfe382b",
+  "idempotency_key": "sherlock-investigation-449ae577a77e4d1a",
+  "document_type": "Insight",
+  "title": "Sherlock investigation: urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD) (sherlock-investigation-449ae577a77e4d1a)",
+  "detail": "Successfully created document: Sherlock investigation: urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD) (sherlock-investigation-449ae577a77e4d1a)"
+}

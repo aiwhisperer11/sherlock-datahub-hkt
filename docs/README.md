@@ -5,6 +5,9 @@ documentation remains with the package that it describes.
 
 - [Backend README](../backend/README.md) and [API endpoints](../backend/docs/API_ENDPOINTS.md)
 - [Backend architecture](../backend/docs/ARCHITECTURE.md) and [DataHub integration](../backend/docs/DATAHUB_INTEGRATION.md)
+- [MCP save_document spike (GO)](../backend/docs/MCP_SAVE_DOCUMENT_SPIKE.md) — read/save/retrieve verified live; files to integrate
+- [Publish/approval flow (wired)](../backend/docs/PUBLISH_APPROVAL_FLOW.md) — DocumentWritebackProvider: preview/publish/retrieve contract
+- [Stable DataHub host setup](../backend/docs/DEPLOY_STABLE_DATAHUB_HOST.md) (replaces the temporary tunnel for judging-period uptime)
 - [Backend setup](../backend/docs/SETUP.md) and [Sherlock Core integration](../backend/docs/SHERLOCK_CORE_INTEGRATION.md)
 - [Web README](../web/README.md), [web setup](../web/docs/SETUP.md), and [UI architecture](../web/docs/UI_ARCHITECTURE.md)
 - [Backend decision](../backend/docs/decisions/0001-sandbox-first.md) and [web decision](../web/docs/decisions/0001-client-demo-fetch.md)
